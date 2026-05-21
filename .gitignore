@@ -1,0 +1,22 @@
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+.vs/
+
+# Local-only files (don't ever commit secrets — keys live in the user's browser localStorage anyway)
+.env
+.env.*
+*.key
+secrets.json
+
+# Build artifacts (we have none today, but keep this for the future)
+node_modules/
+dist/
+build/
+
+# Old cache-busting copy that used to live alongside archai.html
+archai-v2.html
