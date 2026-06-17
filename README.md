@@ -10,7 +10,7 @@ No accounts. No backend. No telemetry. Your API key never leaves your browser.
 
 ## Quick start
 
-1. Open `archai.html` in any modern browser, or host the file on GitHub Pages / Vercel / anywhere static (see [Deploy](#deploy)).
+1. Open `index.html` in any modern browser, or host the file on GitHub Pages / Vercel / anywhere static (see [Deploy](#deploy)).
 2. In **section 3 (LLM provider)**, pick a provider and paste your key.
 3. In **section 1**, pick a diagram format (drawio or Mermaid), describe a system, click **Generate fresh diagram**.
 4. Edit visually (drawio) or refine with another prompt: type a change, click **Refine current diagram**.
@@ -76,7 +76,7 @@ Native in-browser Bedrock support (with SigV4 signing) is on the Phase 2 roadmap
 
 ```
 ┌──────────────────────────────┐   fetch (BYOK)    ┌──────────────┐
-│ archai.html (your browser)   │ ────────────────► │ LLM provider │
+│ index.html (your browser)    │ ────────────────► │ LLM provider │
 │ - format adapter (drawio/    │ ◄──────────────── │              │
 │   mermaid) chooses prompt    │      source       └──────────────┘
 │   + extractor                │
@@ -101,7 +101,7 @@ ArchAI is a single static file, so any static host works.
 ### GitHub Pages (zero-config, recommended)
 
 ```bash
-# from inside the folder containing archai.html + README.md
+# from inside the folder containing index.html + README.md
 git init
 git add .
 git commit -m "Initial ArchAI release"
@@ -112,9 +112,7 @@ git branch -M main
 git push -u origin main
 ```
 
-Then in GitHub: **Settings → Pages → Source: Deploy from branch → main / (root) → Save.** Wait ~1 minute. Your app is live at `https://<your-username>.github.io/archai/archai.html`.
-
-For a cleaner URL, rename `archai.html` to `index.html` before deploying.
+Then in GitHub: **Settings → Pages → Source: Deploy from branch → main / (root) → Save.** Wait ~1 minute. Your app is live at `https://<your-username>.github.io/archai/` — the app is `index.html`, so that root URL serves it directly.
 
 ### Vercel / Netlify / Cloudflare Pages
 
@@ -122,7 +120,7 @@ Drop the folder in — they all serve static files with no config. Same files, s
 
 ### Local
 
-Just open `archai.html` from disk (`file://`). Works in any modern browser. Local models like Ollama may need `OLLAMA_ORIGINS=*` to accept browser requests.
+Just open `index.html` from disk (`file://`). Works in any modern browser. Local models like Ollama may need `OLLAMA_ORIGINS=*` to accept browser requests.
 
 ## Trust — why you can believe "your key never leaves your browser"
 
@@ -138,7 +136,7 @@ The "Clear stored config" button removes the key from `localStorage` immediately
 
 ## Files
 
-- `archai.html` — the entire app, single file.
+- `index.html` — the entire app, single file.
 - `PLAN.md` — project plan / PRD (problem, scope, architecture, roadmap).
 - `README.md` — this file.
 - `LICENSE` — Apache 2.0.

@@ -1,8 +1,8 @@
-# ArchAI (working title) — Project Plan
+# ArchAI — Project Plan
 
-A free, open-source web app that turns a plain-English description of a system into an editable AWS architecture diagram, rendered inside an embedded drawio editor.
+A free, open-source web app that turns a plain-English description of a system into an editable architecture diagram — drawio (embedded editor, AWS4 icons) or Mermaid (client-side, AWS `architecture-beta` icons).
 
-Status: planning / prototype
+Status: shipped — MVP (text → drawio) plus Mermaid as a second format, load-existing, and AI refine are all live. Single-file app, hosted as a static page. README.md is the source of truth for current features; this PLAN is the original product thinking, kept for context.
 License: Apache 2.0 (compatible with drawio upstream)
 Owner: Ravi
 
@@ -124,22 +124,28 @@ That's the entire UX. No accounts, no signup, no upload, no router.
 
 ## 8. Roadmap
 
-**Phase 1 — MVP (this session + a weekend):**
-- Single-file HTML prototype.
-- OpenAI-compatible + Anthropic direct.
-- AWS-focused prompt library, 4 few-shot examples.
+**Phase 1 — MVP (shipped):**
+- Single-file HTML app.
+- OpenAI-compatible + Anthropic direct (+ Bedrock via LiteLLM proxy).
+- AWS-focused prompt library, few-shot examples.
 - localStorage config.
 - README + Apache 2.0 license + drawio attribution.
 
-**Phase 2 — Polish (next 2–3 weekends):**
+**Phase 1.5 — second format + iteration (shipped):**
+- Mermaid as a second format, with AWS `architecture-beta` real-icon support.
+- Load an existing diagram (file or paste) for either format.
+- "Refine this diagram" follow-up turns (model sees current source + new instruction).
+- Robust extractors with truncated-output recovery.
+
+**Phase 2 — Polish (next):**
 - Native Bedrock support (SigV4 in browser).
 - Expanded AWS shape coverage; Azure and GCP shape sets.
-- "Refine this diagram" follow-up turns (model sees current XML + new instruction).
-- Diagram templates gallery.
+- Content-Security-Policy lockdown (whitelist configured provider origins).
+- Diagram templates gallery; Excalidraw as a third format.
 
 **Phase 3 — Differentiators:**
-- Code/Terraform → diagram. Paste HCL, get architecture.
-- Diagram review/critique mode. Upload XML, get SPOFs / scaling / security feedback.
+- Code/Terraform/CloudFormation/CDK → diagram. Paste IaC, get architecture.
+- Diagram review/critique mode. Upload source, get SPOFs / scaling / security feedback.
 - Optional: C4 model support.
 
 ## 9. Licensing / legal notes

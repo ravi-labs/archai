@@ -1,0 +1,47 @@
+{
+  "name": "archai-review",
+  "version": "0.1.0",
+  "description": "ArchAI Reviewer — point it at a repo, it understands the code and generates the architecture-review diagrams the codebase actually needs (drawio + Mermaid). CLI + MCP server, BYOK.",
+  "type": "module",
+  "bin": {
+    "archai-review": "dist/cli.js",
+    "archai-review-mcp": "dist/mcp.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/cli.ts",
+    "clean": "rm -rf dist",
+    "start": "node dist/cli.js",
+    "mcp": "node dist/mcp.js",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "architecture",
+    "diagram",
+    "drawio",
+    "mermaid",
+    "code-review",
+    "mcp",
+    "model-context-protocol",
+    "c4",
+    "documentation"
+  ],
+  "license": "Apache-2.0",
+  "author": "ravi-labs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "ignore": "^5.3.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

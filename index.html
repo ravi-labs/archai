@@ -2,11 +2,922 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>ArchAI</title>
-<meta http-equiv="refresh" content="0; url=./archai.html" />
-<link rel="canonical" href="./archai.html" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ArchAI — text to architecture diagrams (drawio, Mermaid)</title>
+<meta name="description" content="Turn plain-English descriptions into editable architecture diagrams — drawio (AWS icons) or Mermaid. Free, open-source, bring-your-own-key, no signup. Your API key never leaves your browser." />
+<meta name="theme-color" content="#0969da" />
+<!-- Open Graph / social preview -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="ArchAI — plain-English → editable architecture diagrams" />
+<meta property="og:description" content="Describe a system, get an editable drawio or Mermaid diagram with real AWS icons. Free, open-source, BYOK, no signup — your key stays in your browser." />
+<meta property="og:url" content="https://ravi-chan-dran.github.io/archai/" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="ArchAI — plain-English → editable architecture diagrams" />
+<meta name="twitter:description" content="Describe a system, get an editable drawio or Mermaid diagram. Free, open-source, BYOK, no signup." />
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a1a; background: #f4f5f7; }
+  .app { display: grid; grid-template-columns: 420px 1fr; height: 100vh; }
+  .sidebar { background: #fff; border-right: 1px solid #e1e4e8; overflow-y: auto; padding: 20px; }
+  .canvas { position: relative; background: #f4f5f7; }
+  .canvas iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .canvas .mermaid-host { position: absolute; inset: 0; background: #fff; overflow: auto; padding: 24px; }
+  .canvas .mermaid-host svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .canvas .mermaid-host .mermaid-empty { color: #94a3b8; font-size: 14px; text-align: center; margin-top: 80px; }
+  .canvas .mermaid-host .mermaid-error { color: #cf222e; background: #ffebe9; padding: 16px; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
+
+  h1 { font-size: 18px; margin: 0 0 4px; font-weight: 600; }
+  .tagline { font-size: 12px; color: #6a737d; margin-bottom: 20px; }
+
+  details { margin-bottom: 16px; border: 1px solid #e1e4e8; border-radius: 6px; }
+  details summary { padding: 10px 12px; cursor: pointer; font-weight: 600; font-size: 13px; user-select: none; background: #fafbfc; border-radius: 6px; }
+  details[open] summary { border-bottom: 1px solid #e1e4e8; border-radius: 6px 6px 0 0; }
+  details .body { padding: 12px; }
+
+  label { display: block; font-size: 12px; font-weight: 600; color: #444; margin-bottom: 4px; margin-top: 10px; }
+  label:first-child { margin-top: 0; }
+  input, select, textarea {
+    width: 100%; padding: 8px 10px; font-size: 13px; border: 1px solid #d0d7de; border-radius: 5px;
+    background: #fff; font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 100px; font-family: inherit; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: #0969da; box-shadow: 0 0 0 2px rgba(9,105,218,0.2); }
+
+  button.primary {
+    width: 100%; padding: 10px; background: #0969da; color: #fff; border: 0; border-radius: 6px;
+    font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 12px;
+  }
+  button.primary:hover { background: #0860c4; }
+  button.primary:disabled { background: #94a3b8; cursor: not-allowed; }
+
+  button.primary.secondary {
+    background: #fff; color: #0969da; border: 1px solid #0969da; margin-top: 6px;
+  }
+  button.primary.secondary:hover:not(:disabled) { background: #f0f7ff; }
+  button.primary.secondary:disabled { background: #fff; color: #94a3b8; border-color: #d0d7de; cursor: not-allowed; }
+
+  .file-input { padding: 6px; font-size: 12px; }
+  textarea.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; min-height: 80px; }
+
+  button.ghost {
+    padding: 6px 10px; background: #fff; color: #0969da; border: 1px solid #d0d7de; border-radius: 5px;
+    font-size: 12px; cursor: pointer; margin-right: 6px; margin-bottom: 6px;
+  }
+  button.ghost:hover { background: #f6f8fa; }
+
+  .status { margin-top: 10px; font-size: 12px; padding: 8px; border-radius: 5px; display: none; }
+  .status.show { display: block; }
+  .status.ok { background: #dcffe4; color: #1a7f37; }
+  .status.err { background: #ffebe9; color: #cf222e; }
+  .status.info { background: #ddf4ff; color: #0969da; }
+
+  .examples { display: flex; flex-wrap: wrap; margin-top: 8px; }
+
+  .footer { font-size: 11px; color: #6a737d; margin-top: 20px; padding-top: 12px; border-top: 1px solid #e1e4e8; line-height: 1.5; }
+  .footer a { color: #0969da; text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+
+  .hint { font-size: 11px; color: #6a737d; margin-top: 4px; line-height: 1.4; }
+  .hint code { background: #f6f8fa; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+
+  .download-bar { position: absolute; top: 12px; right: 12px; z-index: 10; display: none; }
+  .download-bar.show { display: block; }
+  .download-bar button { background: #fff; border: 1px solid #d0d7de; padding: 6px 10px; border-radius: 5px; font-size: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .download-bar button:hover { background: #f6f8fa; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 </head>
 <body>
-<p>Redirecting to <a href="./archai.html">ArchAI</a>…</p>
+<div class="app">
+  <aside class="sidebar">
+    <h1>ArchAI</h1>
+    <div class="tagline">Plain English → editable architecture diagrams. drawio + Mermaid. Generate fresh, load existing, or refine with AI. Free, BYOK, no signup.</div>
+
+    <details open>
+      <summary>1. Describe your system</summary>
+      <div class="body">
+        <label for="format">Diagram format</label>
+        <select id="format">
+          <option value="drawio">drawio — AWS / cloud architecture (rich icons)</option>
+          <option value="mermaid">Mermaid — flowchart / sequence / ER / state + AWS architecture</option>
+        </select>
+        <div class="hint" id="format-hint"></div>
+
+        <label for="prompt">Description (fresh) or change to make (refine)</label>
+        <textarea id="prompt"></textarea>
+        <div class="examples" id="examples"></div>
+
+        <button class="primary" id="generate-btn">Generate fresh diagram</button>
+        <button class="primary secondary" id="refine-btn" disabled title="Load or generate a diagram first">Refine current diagram</button>
+        <div class="status" id="status"></div>
+      </div>
+    </details>
+
+    <details>
+      <summary>2. Load existing diagram (optional)</summary>
+      <div class="body">
+        <label for="file-input">Open a file</label>
+        <input id="file-input" class="file-input" type="file" />
+
+        <label for="xml-paste">Or paste source</label>
+        <textarea id="xml-paste" class="code"></textarea>
+        <button class="ghost" id="load-xml-btn" style="margin-top:8px;">Load into editor</button>
+        <div class="hint">Loads matching source for the selected format. Then refine with AI above, or edit visually on the right (drawio only).</div>
+      </div>
+    </details>
+
+    <details>
+      <summary>3. LLM provider (BYOK)</summary>
+      <div class="body">
+        <label for="provider">Provider</label>
+        <select id="provider">
+          <option value="openai-compat">OpenAI-compatible (OpenAI, LiteLLM, Azure, Ollama, etc.)</option>
+          <option value="anthropic">Anthropic (direct)</option>
+          <option value="bedrock">AWS Bedrock (via LiteLLM proxy)</option>
+        </select>
+        <div class="hint" id="provider-hint"></div>
+
+        <label for="baseUrl">Base URL</label>
+        <input id="baseUrl" type="text" placeholder="https://api.openai.com/v1" />
+
+        <label for="apiKey">API key</label>
+        <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+
+        <label for="model">Model</label>
+        <input id="model" type="text" placeholder="gpt-4o-mini" />
+
+        <button class="ghost" id="test-btn" style="margin-top:10px;">Test connection</button>
+        <button class="ghost" id="clear-btn">Clear stored config</button>
+        <div class="hint">Config is stored in your browser's <code>localStorage</code>. Nothing is sent to us — calls go directly from your browser to your chosen provider.</div>
+      </div>
+    </details>
+
+    <details>
+      <summary>4. About</summary>
+      <div class="body" style="font-size:12px; line-height:1.5; color:#444;">
+        <p>ArchAI generates diagram source from a description and renders it. For drawio, it loads into the embedded drawio editor. For Mermaid, it renders client-side via the Mermaid library.</p>
+        <p>You can also load an existing diagram source file (drawio .drawio/.xml or Mermaid .mmd) and ask the AI to refine it with natural-language instructions.</p>
+        <p>Built on the open-source <a href="https://github.com/jgraph/drawio" target="_blank" rel="noopener">drawio</a> editor and <a href="https://github.com/mermaid-js/mermaid" target="_blank" rel="noopener">Mermaid</a>. ArchAI is not affiliated with JGraph Ltd or the Mermaid project.</p>
+      </div>
+    </details>
+
+    <div class="footer">
+      ArchAI · Apache 2.0 · Built on the open-source drawio editor and Mermaid.
+    </div>
+  </aside>
+
+  <main class="canvas">
+    <div class="download-bar" id="download-bar">
+      <button id="download-btn">Download source</button>
+    </div>
+    <iframe id="drawio" src="https://embed.diagrams.net/?embed=1&ui=kennedy&proto=json&saveAndExit=0&noSaveBtn=1&libraries=1"></iframe>
+    <div id="mermaid-host" class="mermaid-host" style="display:none;">
+      <div class="mermaid-empty">Pick a format and describe a system to generate a diagram.</div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ============================================================================
+// PROVIDER PRESETS
+// ============================================================================
+const PROVIDER_PRESETS = {
+  "openai-compat": {
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-4o-mini",
+    hint: "Works with OpenAI, LiteLLM proxy, Azure OpenAI, Ollama (http://localhost:11434/v1), LM Studio, vLLM, Groq, Together, etc. Any OpenAI-compatible /chat/completions endpoint."
+  },
+  "anthropic": {
+    baseUrl: "https://api.anthropic.com",
+    model: "claude-sonnet-4-6",
+    hint: "Direct Anthropic API. Uses anthropic-dangerous-direct-browser-access for CORS. Get a key at console.anthropic.com."
+  },
+  "bedrock": {
+    baseUrl: "http://localhost:4000",
+    model: "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0",
+    hint: "Recommended path for MVP: run a LiteLLM proxy locally with your AWS creds, point Base URL at the proxy. See README. Native SigV4 Bedrock support is on the Phase 2 roadmap."
+  }
+};
+
+// ============================================================================
+// SYSTEM PROMPTS — one per format
+// ============================================================================
+const SYSTEM_PROMPT_DRAWIO = `You are an expert software/cloud architect. Your job is to take a plain-English description of a system and output a drawio (mxGraph) XML diagram.
+
+OUTPUT REQUIREMENTS — STRICT, NO EXCEPTIONS:
+- Output ONLY raw drawio XML, starting with <mxfile and ending with </mxfile>.
+- Do NOT include markdown code fences (no \`\`\`xml, no \`\`\`), no commentary, no explanation, no preamble. XML only. If you violate this the output is unusable.
+- The XML must be valid and parseable.
+
+CHOOSING SHAPES — adapt to the request:
+- If the user describes an AWS system (mentions AWS services, EC2, S3, Lambda, RDS, etc.), use the AWS4 shape library (rules below).
+- If the user describes a non-AWS architecture (microservices, generic data flow, on-prem, multi-cloud), use generic rectangles/ellipses with clear labels. Still use the mxfile/mxGraphModel envelope.
+- If unclear, default to AWS shapes when there's any cloud signal, otherwise generic.
+
+AWS DIAGRAM FORMAT:
+- Use the AWS4 shape library. The pattern is:
+    style="sketch=0;points=[[0,0,0],[0.5,0,0],[1,0,0],[0,1,0],[0.5,1,0],[1,1,0]];outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#<COLOR>;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.<SERVICE>;"
+- Common service icons (use the resIcon name shown):
+    compute: ec2, lambda, ecs, eks, fargate, lightsail, batch
+    storage: s3, efs, fsx, glacier, storage_gateway
+    database: rds, dynamodb, aurora, elasticache, redshift, documentdb, neptune
+    networking: vpc, subnet, route_53, cloudfront, api_gateway, application_load_balancer, network_load_balancer, nat_gateway, internet_gateway, direct_connect, transit_gateway, vpn_connection
+    integration: sns, sqs, eventbridge, step_functions, mq, kinesis_data_streams, kinesis_data_firehose, kinesis_data_analytics
+    security: iam, cognito, kms, secrets_manager, waf, shield, guardduty
+    analytics: athena, glue, emr, quicksight, lake_formation
+    management: cloudwatch, cloudtrail, systems_manager, config
+- Use fillColor #ED7100 for compute, #7AA116 for storage, #C925D1 for database, #8C4FFF for networking, #E7157B for integration, #DD344C for security, #8C4FFF for analytics, #759C3E for ML.
+- Wrap related resources in container/group cells representing VPCs and subnets using:
+    style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_vpc;strokeColor=#248814;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#AAB7B8;dashed=0;"
+- Connections between resources use:
+    style="edgeStyle=none;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;endArrow=classic;"
+- Layout convention: users on the LEFT, edge services next (CloudFront, ALB), then compute, then data on the RIGHT. Top-down for tiered apps.
+- Icon size: width=78 height=78. Spacing: ~150px horizontal, ~120px vertical.
+- Each resource cell needs a value (label) like "Web tier ASG" or "RDS Postgres".
+
+GENERIC (NON-AWS) SHAPES — when the request is not AWS-specific:
+- Boxes/services: style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" width=140 height=60.
+- Data stores (cylinder): style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;" width=80 height=100.
+- Actors/users: style="shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;outlineConnect=0;" width=30 height=60.
+- Decisions (diamond): style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" width=120 height=60.
+- Containers/groups: style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;"
+- Edges: same as above (edgeStyle=none;endArrow=classic). Label edges with the action ("HTTPS", "publishes", "writes").
+- Layout: left-to-right. ~180px horizontal spacing, ~100px vertical.
+
+MINIMAL EXAMPLE (format reference only — do NOT copy verbatim):
+<mxfile host="embed.diagrams.net">
+<diagram id="d1" name="Architecture">
+<mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+<root>
+<mxCell id="0" /><mxCell id="1" parent="0" />
+<mxCell id="ec2-1" value="Web Server" style="sketch=0;points=[[0,0,0],[0.5,0,0],[1,0,0]];outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ec2;" vertex="1" parent="1">
+<mxGeometry x="400" y="300" width="78" height="78" as="geometry" />
+</mxCell>
+</root>
+</mxGraphModel>
+</diagram>
+</mxfile>
+
+Now generate a complete, correct, well-laid-out diagram for the user's description.`;
+
+const SYSTEM_PROMPT_MERMAID = `You are an expert at producing valid Mermaid diagram source code.
+
+OUTPUT REQUIREMENTS — STRICT, NO EXCEPTIONS:
+- Output ONLY raw Mermaid source. No markdown code fences (no \`\`\`mermaid, no \`\`\`), no commentary, no preamble.
+- The FIRST LINE must be a valid Mermaid header: one of "architecture-beta", "flowchart TD", "flowchart LR", "graph TD", "sequenceDiagram", "classDiagram", "erDiagram", "stateDiagram-v2", "gantt", "journey", "gitGraph", "mindmap", "timeline", "pie", "quadrantChart", "c4Context".
+
+CHOOSING DIAGRAM TYPE — pick whichever fits the user's request best:
+- AWS / cloud architecture (mentions EC2, S3, Lambda, RDS, VPC, etc.) → architecture-beta with logos:aws-* icons. STRONGLY preferred for AWS — real AWS icons, not boxes.
+- Generic process / data flow / non-cloud architecture → flowchart TD (top-down) or flowchart LR (left-right).
+- Messaging between actors / services over time → sequenceDiagram.
+- Data model / database schema → erDiagram.
+- State machine / lifecycle → stateDiagram-v2.
+- Class hierarchy → classDiagram.
+
+ARCHITECTURE-BETA FOR AWS (preferred when the user describes AWS services):
+
+Syntax:
+    architecture-beta
+        group api(logos:aws-api-gateway)[API Layer]
+        service lambda(logos:aws-lambda)[Order Handler] in api
+        service db(logos:aws-dynamodb)[Orders Table] in api
+        lambda:R --> L:db
+
+Rules:
+- Use 'group <id>(icon)[Label]' for VPCs, accounts, regions, logical layers.
+- Use 'service <id>(icon)[Label] in <groupId>' for individual AWS services.
+- Place a service in no group by omitting 'in <groupId>'.
+- Edges between services: 'serviceA:<side> --> <side>:serviceB' where side is T (top), B (bottom), L (left), R (right). Pick sides to keep arrows short and non-crossing.
+- For arrow with label: 'a:R --L--> L:b' (label between dashes).
+
+AWS icon names (use exactly these inside the parens — they are iconify logos:* icons):
+    Compute:        logos:aws-ec2, logos:aws-lambda, logos:aws-ecs, logos:aws-eks, logos:aws-fargate, logos:aws-batch
+    Storage:        logos:aws-s3, logos:aws-efs, logos:aws-fsx, logos:aws-glacier
+    Database:       logos:aws-rds, logos:aws-dynamodb, logos:aws-aurora, logos:aws-elasticache, logos:aws-redshift, logos:aws-documentdb, logos:aws-neptune
+    Networking:     logos:aws-vpc, logos:aws-route-53, logos:aws-cloudfront, logos:aws-api-gateway, logos:aws-elb, logos:aws-nat-gateway, logos:aws-internet-gateway, logos:aws-transit-gateway, logos:aws-direct-connect
+    Integration:    logos:aws-sns, logos:aws-sqs, logos:aws-eventbridge, logos:aws-step-functions, logos:aws-mq, logos:aws-kinesis
+    Security:       logos:aws-iam, logos:aws-cognito, logos:aws-kms, logos:aws-secrets-manager, logos:aws-waf, logos:aws-shield, logos:aws-guard-duty
+    Analytics:      logos:aws-athena, logos:aws-glue, logos:aws-emr, logos:aws-quicksight, logos:aws-lake-formation
+    Management:     logos:aws-cloudwatch, logos:aws-cloudtrail, logos:aws-systems-manager
+    ML:             logos:aws-sagemaker
+    Generic:        cloud, server, database, disk, internet  (use when no AWS-specific icon fits)
+
+AWS architecture-beta example (format reference only — do NOT copy verbatim):
+    architecture-beta
+        group vpc(logos:aws-vpc)[VPC]
+        service cf(logos:aws-cloudfront)[CloudFront]
+        service alb(logos:aws-elb)[ALB] in vpc
+        service web(logos:aws-ec2)[Web tier ASG] in vpc
+        service db(logos:aws-rds)[RDS Postgres] in vpc
+        cf:R --> L:alb
+        alb:R --> L:web
+        web:R --> L:db
+
+FLOWCHART / OTHER DIAGRAMS — layout and style:
+- Give nodes meaningful labels: alb["Application Load Balancer"], NOT just A.
+- Group related nodes with subgraphs:
+    subgraph "VPC"
+      direction TB
+      alb["ALB"]
+      web["Web tier ASG"]
+    end
+- Label edges when the action matters: alb -->|"HTTPS"| web. Use -.->| for async, ==>| for emphasis.
+- For sequenceDiagram: declare participants, use ->>+ for active call, -->>- for return.
+- For erDiagram: USER ||--o{ ORDER : places  (cardinality shorthand).
+- For AWS in flowchart (only if architecture-beta unsuitable, e.g. mixed-flow), color by category:
+    classDef compute fill:#FFEAD2,stroke:#ED7100,color:#232F3E;
+    classDef storage fill:#E9F4D8,stroke:#7AA116,color:#232F3E;
+    classDef database fill:#F5D8F8,stroke:#C925D1,color:#232F3E;
+    classDef networking fill:#E8DBFF,stroke:#8C4FFF,color:#232F3E;
+    classDef integration fill:#FCCCE0,stroke:#E7157B,color:#232F3E;
+    classDef security fill:#FFD2D7,stroke:#DD344C,color:#232F3E;
+    class ec2,lambda,web compute;
+    class s3,efs storage;
+    class rds,db database;
+- Keep node IDs short (alb, web, db); put long text in the [label]. For long labels, use <br/> to wrap.
+
+Now generate complete, well-laid-out Mermaid source for the user's description. For AWS systems, default to architecture-beta unless the user specifically asks for a flowchart/sequence/state view.`;
+
+// ============================================================================
+// EXAMPLES — one set per format
+// ============================================================================
+const EXAMPLES_DRAWIO = [
+  { label: "Three-tier web", text: "A classic three-tier web application on AWS. Users hit CloudFront, which fronts an Application Load Balancer in a public subnet. The ALB distributes to an EC2 Auto Scaling Group of web servers in two private subnets across two AZs. The web tier talks to an Amazon RDS for PostgreSQL Multi-AZ instance in database subnets. Include a NAT Gateway for outbound traffic from private subnets, and show the VPC boundary." },
+  { label: "Serverless API", text: "A serverless REST API on AWS. API Gateway receives requests, invokes a Lambda function that reads and writes to a DynamoDB table. Static frontend assets are served from S3 behind CloudFront. Lambda also publishes events to an SNS topic that fans out to an SQS queue for async processing by a second Lambda." },
+  { label: "Event pipeline", text: "An event-driven pipeline on AWS. A Kinesis Data Stream ingests events from clients. A Lambda consumer enriches each event and writes to S3 (raw zone). An AWS Glue crawler catalogs the data, Athena is used for ad-hoc queries, and EventBridge triggers a downstream Step Function on schedule for batch ETL into Redshift." },
+  { label: "Data lake", text: "A medallion architecture data lake on AWS. Raw data lands in an S3 'bronze' bucket from various sources (S3 transfer, DMS from RDS, Kinesis Firehose). AWS Glue jobs transform bronze to a 'silver' bucket (cleansed) and then to a 'gold' bucket (curated). Athena and Redshift Spectrum query the gold zone. Show Lake Formation governing the catalog and IAM-based access for analyst users." }
+];
+
+const EXAMPLES_MERMAID = [
+  { label: "AWS three-tier (icons)", text: "A three-tier web architecture on AWS. CloudFront fronts an Application Load Balancer in a public subnet of a VPC. The ALB targets an EC2 Auto Scaling Group in private subnets. The web tier talks to an RDS Postgres Multi-AZ. A NAT Gateway gives the private subnets outbound access. Use architecture-beta with the real AWS icons." },
+  { label: "AWS serverless API", text: "A serverless REST API on AWS. CloudFront → API Gateway → Lambda → DynamoDB. S3 hosts static assets behind CloudFront. Lambda also publishes to an SNS topic that fans out to an SQS queue consumed by a second Lambda. Use architecture-beta with AWS icons." },
+  { label: "OAuth login flow", text: "A user authentication flow using OAuth2 authorization code. Show the user, the web app, the identity provider (e.g. Okta), and the resource API. Cover: user clicks login, app redirects to IdP with state, user authenticates, IdP redirects back with code, app exchanges code for tokens at IdP, app calls API with bearer token. Use sequenceDiagram." },
+  { label: "Ticket state machine", text: "A state machine for a support ticket. States: new → open (agent claims it) → pending (waiting on customer) → open (customer replied) → resolved (agent closed) → closed (after 7 days). Also reopened if the customer replies within 7 days of resolved. Show all transitions with their triggers." }
+];
+
+// ============================================================================
+// EXTRACTORS — one per format
+// ============================================================================
+function extractDrawioXml(raw) {
+  let s = (raw || "").trim();
+  s = s.replace(/```(?:xml|html)?\s*/gi, "").replace(/```/g, "").trim();
+
+  // Case 1: full mxfile present
+  const mxfStart = s.indexOf("<mxfile");
+  const mxfEnd = s.lastIndexOf("</mxfile>");
+  if (mxfStart !== -1 && mxfEnd !== -1 && mxfEnd > mxfStart) {
+    return s.slice(mxfStart, mxfEnd + "</mxfile>".length);
+  }
+
+  // Case 1b: <mxfile> opened but never closed — almost certainly truncated. Best-effort recovery.
+  if (mxfStart !== -1 && mxfEnd === -1) {
+    let body = s.slice(mxfStart);
+    const lastLT = body.lastIndexOf("<");
+    const lastGT = body.lastIndexOf(">");
+    if (lastLT > lastGT) body = body.slice(0, lastLT);
+    const lastCellOpen = body.lastIndexOf("<mxCell");
+    const lastCellClose = body.lastIndexOf("</mxCell>");
+    if (lastCellOpen !== -1 && lastCellOpen > lastCellClose) {
+      const tail = body.slice(lastCellOpen);
+      if (tail.indexOf("/>") === -1) body = body.slice(0, lastCellOpen);
+    }
+    const closers = [];
+    if (body.indexOf("<root") !== -1 && body.indexOf("</root>") === -1) closers.push("</root>");
+    if (body.indexOf("<mxGraphModel") !== -1 && body.indexOf("</mxGraphModel>") === -1) closers.push("</mxGraphModel>");
+    if (body.indexOf("<diagram") !== -1 && body.indexOf("</diagram>") === -1) closers.push("</diagram>");
+    closers.push("</mxfile>");
+    return body + closers.join("");
+  }
+
+  // Case 2: bare <mxGraphModel> — wrap it in an mxfile envelope
+  const gmStart = s.indexOf("<mxGraphModel");
+  const gmEnd = s.lastIndexOf("</mxGraphModel>");
+  if (gmStart !== -1 && gmEnd !== -1 && gmEnd > gmStart) {
+    const inner = s.slice(gmStart, gmEnd + "</mxGraphModel>".length);
+    return '<mxfile host="embed.diagrams.net"><diagram id="d1" name="Page-1">' + inner + '</diagram></mxfile>';
+  }
+
+  const preview = s.slice(0, 500).replace(/\s+/g, " ");
+  const err = new Error("LLM did not return drawio XML. First 500 chars: " + preview);
+  err.rawOutput = s;
+  throw err;
+}
+
+const MERMAID_HEADERS_RE = /^\s*(architecture-beta|architecture|flowchart|graph|sequenceDiagram|classDiagram|erDiagram|stateDiagram(-v2)?|gantt|journey|gitGraph|mindmap|timeline|pie|quadrantChart|requirementDiagram|c4Context|sankey-beta)\b/;
+
+function extractMermaid(raw) {
+  let s = (raw || "").trim();
+  // Strip code fences (```mermaid ... ``` or ``` ... ```)
+  s = s.replace(/^```(?:mermaid)?\s*\n?/i, "").replace(/```\s*$/i, "").trim();
+  // Some models wrap in <pre>/<code> tags
+  s = s.replace(/^<\/?(?:pre|code)[^>]*>/i, "").replace(/<\/?(?:pre|code)>\s*$/i, "").trim();
+  // If there are multiple fenced blocks, take the first that looks like mermaid
+  if (!MERMAID_HEADERS_RE.test(s)) {
+    const m = s.match(/(flowchart|graph|sequenceDiagram|classDiagram|erDiagram|stateDiagram(-v2)?|gantt|journey|gitGraph|mindmap|timeline|pie|quadrantChart|requirementDiagram|c4Context|sankey-beta)\b[\s\S]*/);
+    if (m) s = m[0].trim();
+  }
+  if (!MERMAID_HEADERS_RE.test(s)) {
+    const preview = s.slice(0, 200).replace(/\s+/g, " ");
+    throw new Error("LLM did not return Mermaid source. First 200 chars: " + preview);
+  }
+  return s;
+}
+
+// ============================================================================
+// DOM REFS
+// ============================================================================
+const $ = id => document.getElementById(id);
+const formatEl = $("format"), formatHintEl = $("format-hint"), examplesEl = $("examples");
+const promptEl = $("prompt"), generateBtn = $("generate-btn"), refineBtn = $("refine-btn"), statusEl = $("status");
+const providerEl = $("provider"), baseUrlEl = $("baseUrl"), apiKeyEl = $("apiKey"), modelEl = $("model");
+const providerHintEl = $("provider-hint");
+const testBtn = $("test-btn"), clearBtn = $("clear-btn");
+const fileInputEl = $("file-input"), xmlPasteEl = $("xml-paste"), loadXmlBtn = $("load-xml-btn");
+const drawioFrame = $("drawio");
+const mermaidHost = $("mermaid-host");
+const downloadBar = $("download-bar"), downloadBtn = $("download-btn");
+
+// ============================================================================
+// STATUS HELPERS
+// ============================================================================
+function setStatus(msg, kind = "info") {
+  statusEl.textContent = msg;
+  statusEl.className = "status show " + kind;
+}
+function clearStatus() { statusEl.className = "status"; }
+
+// ============================================================================
+// LOCAL STORAGE CONFIG
+// ============================================================================
+const CFG_KEY = "archai-config-v2";
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem(CFG_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+function saveConfig() {
+  const cfg = {
+    format: formatEl.value,
+    provider: providerEl.value, baseUrl: baseUrlEl.value, apiKey: apiKeyEl.value, model: modelEl.value
+  };
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+}
+
+function applyProviderPreset(provider, force = false) {
+  const preset = PROVIDER_PRESETS[provider];
+  providerHintEl.textContent = preset.hint;
+  if (force || !baseUrlEl.value) baseUrlEl.value = preset.baseUrl;
+  if (force || !modelEl.value) modelEl.value = preset.model;
+}
+
+// ============================================================================
+// RENDERERS
+// ============================================================================
+function postToDrawio(payload) {
+  drawioFrame.contentWindow.postMessage(JSON.stringify(payload), "*");
+}
+
+const EMPTY_MXFILE = '<mxfile host="embed.diagrams.net"><diagram id="blank" name="Page-1"><mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>';
+
+const DEBUG_DRAWIO = false; // flip to true to log all drawio messages
+
+const drawioRenderer = {
+  name: "drawio",
+  ready: false,
+  pendingXml: null,
+  exportResolver: null,
+  lastKnown: null,
+  EMPTY: EMPTY_MXFILE,
+
+  load(xml) {
+    this.lastKnown = xml;
+    if (this.ready) {
+      postToDrawio({ action: "load", xml, autosave: 1 });
+    } else {
+      this.pendingXml = xml;
+      setTimeout(() => {
+        if (this.pendingXml) {
+          if (DEBUG_DRAWIO) console.log("[drawio] init timeout, forcing load");
+          postToDrawio({ action: "load", xml: this.pendingXml, autosave: 1 });
+          this.pendingXml = null;
+        }
+      }, 4000);
+    }
+  },
+
+  getCurrent() {
+    return new Promise((resolve, reject) => {
+      if (this.exportResolver) {
+        reject(new Error("Another export is already in flight"));
+        return;
+      }
+      this.exportResolver = resolve;
+      postToDrawio({ action: "export", format: "xml" });
+      setTimeout(() => {
+        if (this.exportResolver) {
+          this.exportResolver = null;
+          if (this.lastKnown) resolve(this.lastKnown);
+          else reject(new Error("drawio did not respond to export request"));
+        }
+      }, 5000);
+    });
+  },
+
+  show() {
+    drawioFrame.style.display = "";
+    mermaidHost.style.display = "none";
+  },
+  hide() { drawioFrame.style.display = "none"; }
+};
+
+// drawio iframe message bridge
+window.addEventListener("message", (e) => {
+  if (e.source !== drawioFrame.contentWindow) return;
+  let msg = e.data;
+  if (typeof msg === "string") {
+    try { msg = JSON.parse(msg); } catch { /* leave as string */ }
+  }
+  if (DEBUG_DRAWIO) console.log("[drawio →]", msg);
+
+  const event = (msg && msg.event) || (typeof msg === "string" ? msg : null);
+
+  if (event === "configure") {
+    postToDrawio({ action: "configure", config: {} });
+    return;
+  }
+
+  if (event === "init" || event === "ready") {
+    drawioRenderer.ready = true;
+    const xml = drawioRenderer.pendingXml || EMPTY_MXFILE;
+    postToDrawio({ action: "load", xml, autosave: 1 });
+    drawioRenderer.pendingXml = null;
+    return;
+  }
+
+  if ((event === "autosave" || event === "save") && (msg.xml || msg.data)) {
+    drawioRenderer.lastKnown = msg.xml || msg.data;
+    return;
+  }
+
+  if (event === "export" && drawioRenderer.exportResolver) {
+    const xml = msg.data || msg.xml || "";
+    if (xml) drawioRenderer.lastKnown = xml;
+    drawioRenderer.exportResolver(xml);
+    drawioRenderer.exportResolver = null;
+    return;
+  }
+});
+
+const mermaidRenderer = {
+  name: "mermaid",
+  currentSource: "",
+  EMPTY: "flowchart TD\n  Start([Pick a format and describe your system]) --> Generate[Click Generate]",
+
+  async load(source) {
+    this.currentSource = source;
+    mermaidHost.innerHTML = '<div class="mermaid-empty">Rendering…</div>';
+    try {
+      const id = "m-" + Math.random().toString(36).slice(2);
+      const { svg } = await mermaid.render(id, source);
+      mermaidHost.innerHTML = svg;
+    } catch (err) {
+      const safeSource = source.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+      mermaidHost.innerHTML = `<pre class="mermaid-error">Render error: ${err.message}\n\nSource:\n${safeSource}</pre>`;
+      throw err;
+    }
+  },
+
+  async getCurrent() { return this.currentSource || ""; },
+
+  show() {
+    mermaidHost.style.display = "";
+    drawioFrame.style.display = "none";
+  },
+  hide() { mermaidHost.style.display = "none"; }
+};
+
+// ============================================================================
+// FORMAT ADAPTERS
+// ============================================================================
+const FORMATS = {
+  drawio: {
+    label: "drawio",
+    hint: "drawio mxfile XML rendered in the embedded drawio editor. Best for AWS architectures with rich icons. Edit visually after generating.",
+    placeholder: "e.g. 'A three-tier web app on AWS with ALB, EC2 ASG, and RDS Multi-AZ.' Or after generating: 'Add a CloudFront in front of the ALB and swap RDS for Aurora.'",
+    fileAccept: ".drawio,.xml,.txt,application/xml,text/xml",
+    pastePlaceholder: "<mxfile>...",
+    examples: EXAMPLES_DRAWIO,
+    systemPrompt: SYSTEM_PROMPT_DRAWIO,
+    extractor: extractDrawioXml,
+    renderer: drawioRenderer,
+    downloadName: "diagram.drawio",
+    downloadMime: "application/xml"
+  },
+  mermaid: {
+    label: "Mermaid",
+    hint: "Mermaid source rendered client-side. Uses architecture-beta with real AWS icons for cloud diagrams, plus flowchart/sequence/ER/state/class for everything else. Editing means going back to text and re-generating.",
+    placeholder: "e.g. 'OAuth2 login flow between user, app, and IdP — use sequenceDiagram.' Or after generating: 'Add the refresh-token flow at the end.'",
+    fileAccept: ".mmd,.md,.txt,text/plain",
+    pastePlaceholder: "flowchart TD\n  A --> B",
+    examples: EXAMPLES_MERMAID,
+    systemPrompt: SYSTEM_PROMPT_MERMAID,
+    extractor: extractMermaid,
+    renderer: mermaidRenderer,
+    downloadName: "diagram.mmd",
+    downloadMime: "text/plain"
+  }
+};
+
+let activeFormat = "drawio";
+
+function activeAdapter() { return FORMATS[activeFormat]; }
+
+function applyFormat(name) {
+  activeFormat = name;
+  const adapter = activeAdapter();
+  formatHintEl.textContent = adapter.hint;
+  promptEl.placeholder = adapter.placeholder;
+  fileInputEl.accept = adapter.fileAccept;
+  xmlPasteEl.placeholder = adapter.pastePlaceholder;
+  renderExampleButtons();
+  // Show the right canvas
+  adapter.renderer.show();
+  // Refine availability follows the active renderer's known state
+  const hasContent = adapter.renderer.name === "drawio"
+    ? !!drawioRenderer.lastKnown
+    : !!mermaidRenderer.currentSource;
+  setRefineAvailable(hasContent);
+  saveConfig();
+}
+
+function renderExampleButtons() {
+  examplesEl.innerHTML = "";
+  for (const ex of activeAdapter().examples) {
+    const b = document.createElement("button");
+    b.className = "ghost";
+    b.textContent = ex.label;
+    b.addEventListener("click", () => { promptEl.value = ex.text; });
+    examplesEl.appendChild(b);
+  }
+}
+
+// ============================================================================
+// REFINE BUTTON STATE
+// ============================================================================
+function setRefineAvailable(yes) {
+  refineBtn.disabled = !yes;
+  refineBtn.title = yes
+    ? "Send the current diagram + your instruction to the LLM"
+    : "Load or generate a diagram first";
+}
+
+// ============================================================================
+// LLM CALLS — provider abstraction (format-agnostic)
+// ============================================================================
+async function callOpenAICompat(systemPrompt, userPrompt) {
+  const url = baseUrlEl.value.replace(/\/+$/, "") + "/chat/completions";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKeyEl.value },
+    body: JSON.stringify({
+      model: modelEl.value,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      max_tokens: 16000, temperature: 0.2
+    })
+  });
+  if (!res.ok) throw new Error("LLM error " + res.status + ": " + await res.text());
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content ?? "";
+}
+
+async function callAnthropic(systemPrompt, userPrompt) {
+  const url = baseUrlEl.value.replace(/\/+$/, "") + "/v1/messages";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKeyEl.value,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: modelEl.value,
+      max_tokens: 16000,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }]
+    })
+  });
+  if (!res.ok) throw new Error("Anthropic error " + res.status + ": " + await res.text());
+  const data = await res.json();
+  return data.content?.[0]?.text ?? "";
+}
+
+async function callLLM(systemPrompt, userPrompt) {
+  if (providerEl.value === "anthropic") return callAnthropic(systemPrompt, userPrompt);
+  return callOpenAICompat(systemPrompt, userPrompt);
+}
+
+// ============================================================================
+// GENERATE / LOAD / REFINE FLOWS
+// ============================================================================
+async function runGenerate(userPrompt) {
+  const adapter = activeAdapter();
+  const raw = await callLLM(adapter.systemPrompt, userPrompt);
+  const content = adapter.extractor(raw);
+  await adapter.renderer.load(content);
+  showDownloadBar();
+  return content;
+}
+
+function loadFromString(rawSource, source) {
+  const adapter = activeAdapter();
+  try {
+    const content = adapter.extractor(rawSource);
+    adapter.renderer.load(content);
+    showDownloadBar();
+    setStatus(`Loaded ${adapter.label} from ${source}. Refine with AI above${adapter.renderer.name === "drawio" ? " or edit visually on the right" : ""}.`, "ok");
+    setRefineAvailable(true);
+  } catch (err) {
+    setStatus(`Couldn't parse ${adapter.label} from ${source}: ${err.message}`, "err");
+  }
+}
+
+function buildRefineUserMessage(currentSource, instruction) {
+  const adapter = activeAdapter();
+  const sourceLabel = adapter.renderer.name === "drawio" ? "drawio mxfile XML" : "Mermaid source";
+  return [
+    `Below is the current diagram (${sourceLabel}). Modify it according to the instruction that follows.`,
+    "",
+    "CURRENT DIAGRAM:",
+    currentSource,
+    "",
+    "INSTRUCTION:",
+    instruction,
+    "",
+    `Return the COMPLETE updated ${sourceLabel} — every element that should appear in the final diagram, not just the changed bits.${adapter.renderer.name === "drawio" ? " Preserve existing mxCell ids where possible so existing edges remain valid." : " Preserve existing node IDs so labels and edges stay consistent."} Output source only, no commentary, no markdown fences.`
+  ].join("\n");
+}
+
+// ============================================================================
+// DOWNLOAD CURRENT
+// ============================================================================
+function showDownloadBar() { downloadBar.classList.add("show"); }
+
+downloadBtn.addEventListener("click", async () => {
+  const adapter = activeAdapter();
+  try {
+    const content = await adapter.renderer.getCurrent();
+    if (!content) { setStatus("Nothing to download yet.", "err"); return; }
+    const blob = new Blob([content], { type: adapter.downloadMime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = adapter.downloadName;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    setStatus("Download failed: " + err.message, "err");
+  }
+});
+
+// ============================================================================
+// INIT
+// ============================================================================
+(function init() {
+  // Mermaid setup — strict by default, but architecture-beta requires looser HTML to render icons.
+  if (window.mermaid) {
+    mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose" });
+    // Register the iconify "logos" pack so architecture-beta can use logos:aws-* icons.
+    if (typeof mermaid.registerIconPacks === "function") {
+      try {
+        mermaid.registerIconPacks([
+          {
+            name: "logos",
+            loader: () => fetch("https://unpkg.com/@iconify-json/logos@1/icons.json").then(r => r.json())
+          }
+        ]);
+      } catch (e) {
+        console.warn("Could not register iconify logos pack for Mermaid:", e);
+      }
+    }
+  }
+
+  const cfg = loadConfig();
+  if (cfg) {
+    formatEl.value = cfg.format || "drawio";
+    providerEl.value = cfg.provider || "openai-compat";
+    baseUrlEl.value = cfg.baseUrl || "";
+    apiKeyEl.value = cfg.apiKey || "";
+    modelEl.value = cfg.model || "";
+    applyProviderPreset(providerEl.value, false);
+  } else {
+    applyProviderPreset("openai-compat", true);
+  }
+  applyFormat(formatEl.value);
+})();
+
+formatEl.addEventListener("change", () => applyFormat(formatEl.value));
+providerEl.addEventListener("change", () => applyProviderPreset(providerEl.value, true));
+[baseUrlEl, apiKeyEl, modelEl].forEach(el => el.addEventListener("change", saveConfig));
+
+clearBtn.addEventListener("click", () => {
+  localStorage.removeItem(CFG_KEY);
+  baseUrlEl.value = ""; apiKeyEl.value = ""; modelEl.value = "";
+  applyProviderPreset(providerEl.value, true);
+  setStatus("Cleared stored config.", "info");
+});
+
+// ============================================================================
+// EVENT HANDLERS
+// ============================================================================
+testBtn.addEventListener("click", async () => {
+  saveConfig();
+  setStatus("Testing connection…", "info");
+  try {
+    const adapter = activeAdapter();
+    const probe = adapter.renderer.name === "drawio"
+      ? "Output a single mxfile with one EC2 icon labeled 'Test'. Use the minimal valid structure."
+      : "Output a tiny Mermaid flowchart with two nodes A and B and an edge from A to B. No commentary.";
+    const xml = await callLLM(adapter.systemPrompt, probe);
+    adapter.extractor(xml); // throws if bad
+    setStatus(`Connection works. Provider returned valid ${adapter.label} output.`, "ok");
+  } catch (err) {
+    setStatus("Test failed: " + err.message, "err");
+  }
+});
+
+generateBtn.addEventListener("click", async () => {
+  const userPrompt = promptEl.value.trim();
+  if (!userPrompt) { setStatus("Describe a system first.", "err"); return; }
+  if (!apiKeyEl.value) { setStatus("Set your API key in section 3.", "err"); return; }
+  saveConfig();
+  generateBtn.disabled = true;
+  refineBtn.disabled = true;
+  setStatus(`Calling LLM and generating ${activeAdapter().label} diagram…`, "info");
+  try {
+    await runGenerate(userPrompt);
+    setStatus("Diagram loaded. Edit on the right, or refine with another instruction.", "ok");
+    setRefineAvailable(true);
+  } catch (err) {
+    setStatus("Generation failed: " + err.message, "err");
+  } finally {
+    generateBtn.disabled = false;
+  }
+});
+
+fileInputEl.addEventListener("change", () => {
+  const f = fileInputEl.files && fileInputEl.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => loadFromString(String(reader.result || ""), f.name);
+  reader.onerror = () => setStatus("Could not read the file.", "err");
+  reader.readAsText(f);
+});
+
+loadXmlBtn.addEventListener("click", () => {
+  const raw = xmlPasteEl.value.trim();
+  if (!raw) { setStatus(`Paste some ${activeAdapter().label} source first.`, "err"); return; }
+  loadFromString(raw, "pasted source");
+});
+
+refineBtn.addEventListener("click", async () => {
+  const instruction = promptEl.value.trim();
+  if (!instruction) { setStatus("Describe what to change in the prompt above.", "err"); return; }
+  if (!apiKeyEl.value) { setStatus("Set your API key in section 3.", "err"); return; }
+  saveConfig();
+  refineBtn.disabled = true;
+  generateBtn.disabled = true;
+  setStatus("Reading current diagram…", "info");
+  try {
+    const adapter = activeAdapter();
+    const currentSource = await adapter.renderer.getCurrent();
+    if (!currentSource) throw new Error("No current diagram to refine.");
+    setStatus("Calling LLM to apply your change…", "info");
+    const raw = await callLLM(adapter.systemPrompt, buildRefineUserMessage(currentSource, instruction));
+    const content = adapter.extractor(raw);
+    await adapter.renderer.load(content);
+    showDownloadBar();
+    setStatus("Diagram updated. Iterate again, or edit on the right.", "ok");
+    setRefineAvailable(true);
+  } catch (err) {
+    setStatus("Refine failed: " + err.message, "err");
+  } finally {
+    generateBtn.disabled = false;
+    refineBtn.disabled = false;
+  }
+});
+
+// Ctrl/Cmd-Enter generates; Shift+Ctrl/Cmd-Enter refines (when available)
+promptEl.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+    if (e.shiftKey && !refineBtn.disabled) refineBtn.click();
+    else generateBtn.click();
+  }
+});
+</script>
 </body>
 </html>
