@@ -290,16 +290,16 @@ Rules:
 - Edges between services: 'serviceA:<side> --> <side>:serviceB' where side is T (top), B (bottom), L (left), R (right). Pick sides to keep arrows short and non-crossing.
 - For arrow with label: 'a:R --L--> L:b' (label between dashes).
 
-AWS icon names (use exactly these inside the parens — they are iconify logos:* icons):
-    Compute:        logos:aws-ec2, logos:aws-lambda, logos:aws-ecs, logos:aws-eks, logos:aws-fargate, logos:aws-batch
-    Storage:        logos:aws-s3, logos:aws-efs, logos:aws-fsx, logos:aws-glacier
-    Database:       logos:aws-rds, logos:aws-dynamodb, logos:aws-aurora, logos:aws-elasticache, logos:aws-redshift, logos:aws-documentdb, logos:aws-neptune
-    Networking:     logos:aws-vpc, logos:aws-route-53, logos:aws-cloudfront, logos:aws-api-gateway, logos:aws-elb, logos:aws-nat-gateway, logos:aws-internet-gateway, logos:aws-transit-gateway, logos:aws-direct-connect
-    Integration:    logos:aws-sns, logos:aws-sqs, logos:aws-eventbridge, logos:aws-step-functions, logos:aws-mq, logos:aws-kinesis
-    Security:       logos:aws-iam, logos:aws-cognito, logos:aws-kms, logos:aws-secrets-manager, logos:aws-waf, logos:aws-shield, logos:aws-guard-duty
-    Analytics:      logos:aws-athena, logos:aws-glue, logos:aws-emr, logos:aws-quicksight, logos:aws-lake-formation
-    Management:     logos:aws-cloudwatch, logos:aws-cloudtrail, logos:aws-systems-manager
-    ML:             logos:aws-sagemaker
+AWS icon names — use ONLY names from this verified list (iconify logos:* icons). For any AWS service NOT listed, use the closest listed icon or a generic one (cloud, server, database, disk, internet). Do NOT invent logos:aws-* names — an unknown name renders the node with NO icon:
+    Compute:        logos:aws-ec2, logos:aws-lambda, logos:aws-ecs, logos:aws-eks, logos:aws-fargate, logos:aws-batch, logos:aws-lightsail, logos:aws-elastic-beanstalk
+    Storage:        logos:aws-s3, logos:aws-glacier, logos:aws-backup   (EFS/FSx have no logo icon — use generic 'disk')
+    Database:       logos:aws-rds, logos:aws-dynamodb, logos:aws-aurora, logos:aws-elasticache, logos:aws-redshift, logos:aws-documentdb, logos:aws-neptune, logos:aws-keyspaces, logos:aws-timestream
+    Networking:     logos:aws-vpc, logos:aws-route53, logos:aws-cloudfront, logos:aws-api-gateway, logos:aws-elb   (NAT/internet/transit gateways have no logo icon — use logos:aws-vpc or generic 'internet')
+    Integration:    logos:aws-sns, logos:aws-sqs, logos:aws-eventbridge, logos:aws-step-functions, logos:aws-mq, logos:aws-kinesis, logos:aws-msk, logos:aws-appsync
+    Security:       logos:aws-iam, logos:aws-cognito, logos:aws-kms, logos:aws-secrets-manager, logos:aws-waf, logos:aws-shield, logos:aws-certificate-manager
+    Analytics:      logos:aws-athena, logos:aws-glue, logos:aws-quicksight, logos:aws-lake-formation, logos:aws-open-search
+    Management:     logos:aws-cloudwatch, logos:aws-cloudtrail, logos:aws-systems-manager, logos:aws-config, logos:aws-cloudformation, logos:aws-xray
+    DevTools:       logos:aws-codebuild, logos:aws-codecommit, logos:aws-codedeploy, logos:aws-codepipeline
     Generic:        cloud, server, database, disk, internet  (use when no AWS-specific icon fits)
 
 AWS architecture-beta example (format reference only — do NOT copy verbatim):

@@ -61,7 +61,7 @@ ARCHITECTURE-BETA (preferred for AWS):
         cf:R --> L:alb
         alb:R --> L:web
         web:R --> L:db
-- Icons: logos:aws-ec2, -lambda, -ecs, -eks, -s3, -rds, -dynamodb, -aurora, -elasticache, -vpc, -cloudfront, -api-gateway, -elb, -sns, -sqs, -eventbridge, -step-functions, -kinesis, -iam, -cognito, -kms, -cloudwatch. Generic: cloud, server, database, disk, internet.
+- Icons (use ONLY these verified logos:* names; for anything else use a generic: cloud, server, database, disk, internet — never invent logos:aws-* names, an unknown name renders with NO icon): logos:aws-ec2, -lambda, -ecs, -eks, -fargate, -s3, -glacier, -rds, -dynamodb, -aurora, -elasticache, -redshift, -documentdb, -neptune, -vpc, -route53, -cloudfront, -api-gateway, -elb, -sns, -sqs, -eventbridge, -step-functions, -mq, -kinesis, -iam, -cognito, -kms, -secrets-manager, -waf, -shield, -athena, -glue, -cloudwatch, -cloudtrail, -systems-manager, -cloudformation. Generic: cloud, server, database, disk, internet.
 - Edges: serviceA:<side> --> <side>:serviceB where side is T/B/L/R. Labelled: a:R --L--> L:b.
 
 FLOWCHART / OTHER:
