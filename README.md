@@ -36,7 +36,7 @@ Switch formats with the dropdown in section 1. Each format remembers its own exa
 
 ## Supported LLM providers
 
-ArchAI talks one of three shapes; you choose which in the UI.
+ArchAI talks one of four shapes; you choose which in the UI.
 
 ### OpenAI-compatible (default — recommended)
 
@@ -44,33 +44,46 @@ Works with anything that exposes an OpenAI-style `/chat/completions` endpoint. T
 
 - **OpenAI** — base URL `https://api.openai.com/v1`, model e.g. `gpt-4o-mini` or `gpt-4o`.
 - **Azure OpenAI** — base URL is your deployment URL, model is your deployment name.
-- **LiteLLM proxy** — base URL `http://localhost:4000` (or wherever you run it), model whatever you configured. Recommended bridge to Bedrock, Vertex AI, on-prem models, etc.
 - **Ollama** — base URL `http://localhost:11434/v1`, model e.g. `llama3.1:70b`. (You may need `OLLAMA_ORIGINS=*` to allow browser CORS.)
 - **LM Studio / vLLM / Groq / Together / Fireworks / DeepInfra** — all OpenAI-compatible.
+
+### LiteLLM (your own proxy)
+
+If you run your **own LiteLLM** and know its URL, pick **LiteLLM** and set Base URL to your
+endpoint (e.g. `https://litellm.mycorp.com` or `http://localhost:4000`), Model to anything your
+proxy exposes (`gpt-4o`, `claude-3-5-sonnet`, `bedrock/…`), and API key to your LiteLLM key (or any
+non-empty value if it doesn't require one). One proxy fronts 100+ models — including Bedrock,
+Vertex AI, and on-prem models.
 
 ### Anthropic (direct)
 
 Base URL `https://api.anthropic.com`, model e.g. `claude-sonnet-4-6`. Uses the `anthropic-dangerous-direct-browser-access` header so calls work from a browser. Get a key at console.anthropic.com.
 
-### AWS Bedrock (via LiteLLM proxy)
+### AWS Bedrock — use your own account
 
-The MVP path is **LiteLLM as a proxy**. This avoids implementing AWS SigV4 in the browser, keeps your AWS credentials off the page, and gives you the full LiteLLM model catalog for free.
+**Important:** AWS Bedrock's runtime API does **not** support browser CORS, so a static web page
+can't call Bedrock directly no matter what credentials it has. There are two real ways to use your
+own Bedrock account:
+
+**1. From the web app — via a proxy you run.** Front Bedrock with **LiteLLM** (or API Gateway), then
+point ArchAI at that URL. Your AWS credentials stay on your proxy, never in the browser:
 
 ```bash
-# install LiteLLM
 pip install 'litellm[proxy]'
-
-# set AWS creds however you normally do (env, ~/.aws/credentials, IAM role)
-export AWS_REGION=us-east-1
-
-# start the proxy
-litellm --model bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0
-# proxy is now at http://localhost:4000
+export AWS_REGION=us-east-1   # creds via env, ~/.aws/credentials, or IAM role
+litellm --model bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0   # → http://localhost:4000
 ```
+Then in ArchAI: provider = **Bedrock** (or **LiteLLM**), Base URL = your proxy, Model = your Bedrock
+model id, key = your LiteLLM key (or any non-empty value locally).
 
-Then in ArchAI: provider = "OpenAI-compatible", base URL = `http://localhost:4000`, model = `bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0`, key = anything non-empty (LiteLLM ignores it by default in local mode; set `LITELLM_MASTER_KEY` for real auth).
+**2. Direct, no proxy — via the [Reviewer CLI/MCP](reviewer/).** It runs in Node (no CORS limit), so
+it calls your Bedrock account natively with SigV4:
 
-Native in-browser Bedrock support (with SigV4 signing) is on the Phase 2 roadmap.
+```bash
+ARCHAI_PROVIDER=bedrock AWS_REGION=us-east-1 \
+  ARCHAI_MODEL=anthropic.claude-3-5-sonnet-20241022-v2:0 \
+  archai-review ./your-repo
+```
 
 ## How it works
 

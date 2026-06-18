@@ -131,9 +131,10 @@
       <div class="body">
         <label for="provider">Provider</label>
         <select id="provider">
-          <option value="openai-compat">OpenAI-compatible (OpenAI, LiteLLM, Azure, Ollama, etc.)</option>
+          <option value="openai-compat">OpenAI-compatible (OpenAI, Azure, Ollama, etc.)</option>
+          <option value="litellm">LiteLLM (your proxy URL)</option>
           <option value="anthropic">Anthropic (direct)</option>
-          <option value="bedrock">AWS Bedrock (via LiteLLM proxy)</option>
+          <option value="bedrock">AWS Bedrock (via your proxy)</option>
         </select>
         <div class="hint" id="provider-hint"></div>
 
@@ -185,7 +186,12 @@ const PROVIDER_PRESETS = {
   "openai-compat": {
     baseUrl: "https://api.openai.com/v1",
     model: "gpt-4o-mini",
-    hint: "Works with OpenAI, LiteLLM proxy, Azure OpenAI, Ollama (http://localhost:11434/v1), LM Studio, vLLM, Groq, Together, etc. Any OpenAI-compatible /chat/completions endpoint."
+    hint: "Works with OpenAI, Azure OpenAI, Ollama (http://localhost:11434/v1), LM Studio, vLLM, Groq, Together, etc. Any OpenAI-compatible /chat/completions endpoint."
+  },
+  "litellm": {
+    baseUrl: "http://localhost:4000",
+    model: "gpt-4o-mini",
+    hint: "Your own LiteLLM proxy. Set Base URL to your LiteLLM endpoint (e.g. https://litellm.mycorp.com or http://localhost:4000) and Model to any model your proxy exposes (e.g. claude-3-5-sonnet, gpt-4o, bedrock/…). API key = your LiteLLM key, or any non-empty value if the proxy doesn't require one."
   },
   "anthropic": {
     baseUrl: "https://api.anthropic.com",
@@ -195,7 +201,7 @@ const PROVIDER_PRESETS = {
   "bedrock": {
     baseUrl: "http://localhost:4000",
     model: "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0",
-    hint: "Recommended path for MVP: run a LiteLLM proxy locally with your AWS creds, point Base URL at the proxy. See README. Native SigV4 Bedrock support is on the Phase 2 roadmap."
+    hint: "Use your OWN AWS Bedrock account through a proxy you run — AWS Bedrock can't be called directly from a browser (no CORS). Easiest: run LiteLLM with your AWS creds, set Base URL to your proxy and Model to your Bedrock model id. For native direct-to-Bedrock (no proxy), use the ArchAI Reviewer CLI/MCP (runs in Node)."
   }
 };
 

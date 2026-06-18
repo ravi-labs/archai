@@ -44,10 +44,34 @@ archai-review ./path/to/repo
 archai-review ./repo --out ./review --concurrency 4
 ```
 
-Provider overrides (any OpenAI-compatible endpoint — LiteLLM, Ollama, Azure, …):
-`ARCHAI_PROVIDER`, `ARCHAI_BASE_URL`, `ARCHAI_MODEL`, `ARCHAI_API_KEY`.
-
 The key is read from the environment at call time and **never written to disk**.
+
+### Providers
+
+Unlike the web app (which can't reach AWS Bedrock directly because Bedrock's API
+has no browser CORS), the Reviewer runs in **Node**, so it can call Bedrock natively.
+
+**LiteLLM (your proxy):**
+```bash
+ARCHAI_BASE_URL=https://litellm.mycorp.com \
+ARCHAI_MODEL=claude-3-5-sonnet \
+OPENAI_API_KEY=$LITELLM_KEY \
+archai-review ./repo
+```
+
+**AWS Bedrock (your account, direct — no proxy):**
+```bash
+ARCHAI_PROVIDER=bedrock \
+AWS_REGION=us-east-1 \
+ARCHAI_MODEL=anthropic.claude-3-5-sonnet-20241022-v2:0 \
+archai-review ./repo
+# AWS credentials come from the standard chain: AWS_ACCESS_KEY_ID/SECRET[/SESSION_TOKEN],
+# ~/.aws/credentials, or an attached IAM role. Uses the Bedrock Converse API (SigV4).
+# Model can be an inference-profile id too, e.g. us.anthropic.claude-3-5-sonnet-20241022-v2:0.
+```
+
+All overrides: `ARCHAI_PROVIDER` (`anthropic` | `openai-compat` | `bedrock`),
+`ARCHAI_BASE_URL`, `ARCHAI_MODEL`, `ARCHAI_API_KEY`, `ARCHAI_AWS_REGION`.
 
 ## MCP server
 

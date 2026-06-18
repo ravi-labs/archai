@@ -28,10 +28,15 @@ Options:
 Provider (BYOK — set one):
   ANTHROPIC_API_KEY    Use Anthropic direct (default model claude-sonnet-4-6)
   OPENAI_API_KEY       Use OpenAI-compatible (default model gpt-4o-mini)
+  LiteLLM              Set ARCHAI_BASE_URL to your proxy URL + ARCHAI_MODEL (uses the OpenAI-compatible path)
+  AWS Bedrock          ARCHAI_PROVIDER=bedrock — calls your account directly via SigV4 (no proxy needed).
+                       Creds: AWS_ACCESS_KEY_ID/SECRET (or ~/.aws, IAM role). Region: AWS_REGION. Model: ARCHAI_MODEL.
   ARCHAI_PROVIDER / ARCHAI_BASE_URL / ARCHAI_MODEL / ARCHAI_API_KEY  (overrides)
 
-Example:
-  ANTHROPIC_API_KEY=sk-ant-… archai-review ./my-service`;
+Examples:
+  ANTHROPIC_API_KEY=sk-ant-… archai-review ./my-service
+  ARCHAI_BASE_URL=https://litellm.mycorp.com ARCHAI_MODEL=claude-3-5-sonnet OPENAI_API_KEY=… archai-review ./svc
+  ARCHAI_PROVIDER=bedrock AWS_REGION=us-east-1 ARCHAI_MODEL=anthropic.claude-3-5-sonnet-20241022-v2:0 archai-review ./svc`;
 
 function parseArgs(argv: string[]) {
   const args = { path: "", out: "", concurrency: 3, help: false, version: false };
@@ -64,8 +69,8 @@ async function main(): Promise<void> {
   const outDir = args.out ? path.resolve(args.out) : path.join(repoPath, "archai-review");
   const provider = resolveProvider();
 
-  if (!provider.apiKey) {
-    console.error("✗ No API key. Set ANTHROPIC_API_KEY or OPENAI_API_KEY (see --help).");
+  if (provider.provider !== "bedrock" && !provider.apiKey) {
+    console.error("✗ No API key. Set ANTHROPIC_API_KEY or OPENAI_API_KEY, or ARCHAI_PROVIDER=bedrock for AWS Bedrock (see --help).");
     process.exit(1);
   }
 
