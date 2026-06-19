@@ -88,6 +88,9 @@
   .deploy-banner { font-size: 12px; color: #1a7f37; background: #dcffe4; border: 1px solid #b4e6c2; padding: 8px 10px; border-radius: 6px; margin-bottom: 16px; line-height: 1.4; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<!-- ELK graph-layout engine: used to re-flow drawio diagrams so node positions
+     are computed by an algorithm, not guessed by the LLM. -->
+<script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
 </head>
 <body>
 <div class="app">
@@ -609,6 +612,111 @@ window.addEventListener("message", (e) => {
   }
 });
 
+// ============================================================================
+// LAYOUT — ELK auto-layout (positions computed by an algorithm, not the LLM)
+// ============================================================================
+let MERMAID_ELK_OK = false;
+
+// Route graph-family Mermaid diagrams through ELK via a frontmatter config.
+// Restricted to flowchart/graph (where the pluggable layout applies and helps
+// most); sequence/er/state/architecture-beta keep their own layout.
+function mermaidWithElk(source) {
+  if (!MERMAID_ELK_OK) return source;
+  const s = source.trimStart();
+  if (/^(---|%%\{)/.test(s)) return source;            // already has frontmatter/init
+  if (!/^(flowchart|graph)\b/.test(s)) return source;  // only the graph family
+  return "---\nconfig:\n  layout: elk\n---\n" + source;
+}
+
+// Re-flow a drawio diagram with ELK: discard the LLM's x/y, compute clean
+// positions (layered, left→right) honoring container nesting (VPC/subnet), and
+// write them back. Best-effort — returns the original XML on any failure.
+async function reflowDrawioWithElk(xml) {
+  try {
+    if (!window.ELK) return xml;
+    const doc = new DOMParser().parseFromString(xml, "text/xml");
+    if (doc.getElementsByTagName("parsererror").length) return xml;
+    const cells = [...doc.getElementsByTagName("mxCell")];
+    const byId = new Map(cells.map(c => [c.getAttribute("id"), c]));
+    const geomOf = c => c && c.getElementsByTagName("mxGeometry")[0];
+    const isVertex = c => c.getAttribute("vertex") === "1";
+    const isEdge = c => c.getAttribute("edge") === "1";
+
+    const kids = new Map();                              // parent id -> child vertices
+    cells.forEach(c => {
+      if (!isVertex(c)) return;
+      const p = c.getAttribute("parent");
+      if (!kids.has(p)) kids.set(p, []);
+      kids.get(p).push(c);
+    });
+
+    const build = (parentId) => (kids.get(parentId) || []).map(c => {
+      const id = c.getAttribute("id");
+      const g = geomOf(c);
+      const w = (g && parseFloat(g.getAttribute("width"))) || 80;
+      const h = (g && parseFloat(g.getAttribute("height"))) || 60;
+      const children = build(id);
+      const node = { id, width: w, height: h };
+      if (children.length) {
+        node.children = children;
+        node.layoutOptions = { "elk.padding": "[top=34,left=20,bottom=20,right=20]" };
+      }
+      return node;
+    });
+
+    const layer = cells.find(c => c.getAttribute("parent") === "0");  // default layer (usually id "1")
+    const rootId = layer ? layer.getAttribute("id") : "1";
+    const topNodes = build(rootId);
+    if (!topNodes.length) return xml;
+
+    const edges = cells.filter(isEdge).map(c => {
+      const s = c.getAttribute("source"), t = c.getAttribute("target");
+      return (s && t && byId.has(s) && byId.has(t))
+        ? { id: c.getAttribute("id") || ("e_" + s + "_" + t), sources: [s], targets: [t] }
+        : null;
+    }).filter(Boolean);
+
+    const graph = {
+      id: "root",
+      layoutOptions: {
+        "elk.algorithm": "layered",
+        "elk.direction": "RIGHT",
+        "elk.layered.spacing.nodeNodeBetweenLayers": "90",
+        "elk.spacing.nodeNode": "55",
+        "elk.padding": "[top=20,left=20,bottom=20,right=20]"
+      },
+      children: topNodes,
+      edges
+    };
+
+    const res = await new ELK().layout(graph);
+    const apply = (nodes) => nodes.forEach(n => {
+      const g = geomOf(byId.get(n.id));
+      if (!g) return;
+      if (Number.isFinite(n.x)) g.setAttribute("x", String(Math.round(n.x)));
+      if (Number.isFinite(n.y)) g.setAttribute("y", String(Math.round(n.y)));
+      if (n.children && n.children.length) {
+        g.setAttribute("width", String(Math.round(n.width)));
+        g.setAttribute("height", String(Math.round(n.height)));
+        apply(n.children);
+      }
+    });
+    apply(res.children || []);
+
+    // drop explicit edge waypoints so drawio re-routes cleanly between the new positions
+    cells.filter(isEdge).forEach(c => {
+      const g = geomOf(c);
+      if (!g) return;
+      [...g.getElementsByTagName("Array")].forEach(a => { if (a.getAttribute("as") === "points") a.remove(); });
+    });
+
+    return new XMLSerializer().serializeToString(doc);
+  } catch (e) {
+    console.warn("ELK drawio reflow failed, using original layout:", e);
+    return xml;
+  }
+}
+
 const mermaidRenderer = {
   name: "mermaid",
   currentSource: "",
@@ -619,7 +727,7 @@ const mermaidRenderer = {
     mermaidHost.innerHTML = '<div class="mermaid-empty">Rendering…</div>';
     try {
       const id = "m-" + Math.random().toString(36).slice(2);
-      const { svg } = await mermaid.render(id, source);
+      const { svg } = await mermaid.render(id, mermaidWithElk(source));
       mermaidHost.innerHTML = svg;
     } catch (err) {
       const safeSource = source.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -768,9 +876,10 @@ async function runGenerate(userPrompt) {
   const adapter = activeAdapter();
   const raw = await callLLM(adapter.systemPrompt, userPrompt);
   const content = adapter.extractor(raw);
-  await adapter.renderer.load(content);
+  const laidOut = adapter.renderer.name === "drawio" ? await reflowDrawioWithElk(content) : content;
+  await adapter.renderer.load(laidOut);
   showDownloadBar();
-  return content;
+  return laidOut;
 }
 
 function loadFromString(rawSource, source) {
@@ -842,6 +951,13 @@ downloadBtn.addEventListener("click", async () => {
       } catch (e) {
         console.warn("Could not register iconify logos pack for Mermaid:", e);
       }
+    }
+    // Register ELK as a layout engine for Mermaid (cleaner flow/graph layouts than
+    // the default dagre). Loaded async; we fall back to dagre if it's unavailable.
+    if (typeof mermaid.registerLayoutLoaders === "function") {
+      import("https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0/dist/mermaid-layout-elk.esm.min.mjs")
+        .then((m) => { mermaid.registerLayoutLoaders(m.default); MERMAID_ELK_OK = true; })
+        .catch((e) => console.warn("Mermaid ELK layout unavailable, using default:", e));
     }
   }
 
@@ -977,7 +1093,8 @@ refineBtn.addEventListener("click", async () => {
     setStatus("Calling LLM to apply your change…", "info");
     const raw = await callLLM(adapter.systemPrompt, buildRefineUserMessage(currentSource, instruction));
     const content = adapter.extractor(raw);
-    await adapter.renderer.load(content);
+    const laidOut = adapter.renderer.name === "drawio" ? await reflowDrawioWithElk(content) : content;
+    await adapter.renderer.load(laidOut);
     showDownloadBar();
     setStatus("Diagram updated. Iterate again, or edit on the right.", "ok");
     setRefineAvailable(true);
