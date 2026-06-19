@@ -87,6 +87,29 @@
   .download-bar button:disabled { opacity: 0.6; cursor: not-allowed; }
 
   .deploy-banner { font-size: 12px; color: #1a7f37; background: #dcffe4; border: 1px solid #b4e6c2; padding: 8px 10px; border-radius: 6px; margin-bottom: 16px; line-height: 1.4; }
+
+  /* Multi-agent Studio panel */
+  .studio-panel { position: absolute; inset: 0; background: #f4f5f7; overflow-y: auto; padding: 20px 24px; display: none; z-index: 20; }
+  .studio-panel.show { display: block; }
+  .studio-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .studio-head h2 { font-size: 16px; margin: 0; font-weight: 600; }
+  .studio-head button { background: #fff; border: 1px solid #d0d7de; padding: 6px 12px; border-radius: 5px; font-size: 12px; cursor: pointer; }
+  .studio-sub { font-size: 12px; color: #6a737d; margin-bottom: 16px; }
+  .studio-phase { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #6a737d; margin: 16px 0 8px; font-weight: 600; }
+  .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+  .agent-card { background: #fff; border: 1px solid #e1e4e8; border-left: 3px solid #d0d7de; border-radius: 6px; padding: 10px 12px; }
+  .agent-card .ac-name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .agent-card .ac-info { font-size: 11px; color: #6a737d; margin-top: 4px; line-height: 1.4; min-height: 14px; }
+  .agent-card .ac-dot { width: 8px; height: 8px; border-radius: 50%; background: #d0d7de; flex: none; }
+  .agent-card.running { border-left-color: #0969da; }
+  .agent-card.running .ac-dot { background: #0969da; animation: acpulse 1s infinite; }
+  .agent-card.done { border-left-color: #1a7f37; }
+  .agent-card.done .ac-dot { background: #1a7f37; }
+  .agent-card.failed { border-left-color: #cf222e; }
+  .agent-card.failed .ac-dot { background: #cf222e; }
+  .agent-card.win { border-left-color: #bf8700; background: #fffbe6; }
+  @keyframes acpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .ac-score { float: right; font-size: 12px; font-weight: 700; color: #0969da; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <!-- ELK graph-layout engine: used to re-flow drawio diagrams so node positions
@@ -121,6 +144,20 @@
         <button class="primary" id="generate-btn">Generate fresh diagram</button>
         <button class="primary secondary" id="refine-btn" disabled title="Load or generate a diagram first">Refine current diagram</button>
         <div class="status" id="status"></div>
+      </div>
+    </details>
+
+    <details>
+      <summary>✨ Studio — multi-agent (best of N)</summary>
+      <div class="body">
+        <div class="hint">The tool spawns a team of agents: a researcher, one <b>architect per line below (run in parallel)</b>, an adversarial reviewer, a scorer, and a synthesizer that merges the winner. Uses your prompt above as the brief.</div>
+        <label for="strategies">Architect strategies (one per line = one parallel agent)</label>
+        <textarea id="strategies" class="code" style="min-height:84px;">Cost-optimized, minimal services
+High-availability &amp; resilience first
+Serverless-first, managed services</textarea>
+        <button class="primary" id="studio-btn">Run Studio</button>
+        <div class="hint" id="studio-cost"></div>
+        <div class="status" id="studio-status"></div>
       </div>
     </details>
 
@@ -192,6 +229,14 @@
     <iframe id="drawio" src="https://embed.diagrams.net/?embed=1&ui=kennedy&proto=json&saveAndExit=0&noSaveBtn=1&libraries=1"></iframe>
     <div id="mermaid-host" class="mermaid-host" style="display:none;">
       <div class="mermaid-empty">Pick a format and describe a system to generate a diagram.</div>
+    </div>
+    <div id="studio-panel" class="studio-panel">
+      <div class="studio-head">
+        <h2>✨ Agent Studio</h2>
+        <button id="studio-close">View diagram →</button>
+      </div>
+      <div class="studio-sub" id="studio-sub">Spawning the team…</div>
+      <div id="studio-stage"></div>
     </div>
   </main>
 </div>
@@ -966,6 +1011,160 @@ async function runRelayout() {
 }
 relayoutBtn.addEventListener("click", runRelayout);
 layoutDirEl.addEventListener("change", () => { layoutDirection = layoutDirEl.value; runRelayout(); });
+
+// ============================================================================
+// STUDIO — multi-agent pipeline (the tool spawns & runs the agents in parallel)
+//   Researcher → N Architects (parallel) → adversarial Reviewer + Scorer
+//   (parallel per candidate) → Synthesizer → ELK layout → render.
+// ============================================================================
+const STUDIO_RESEARCH = `You are a principal solutions architect. Turn the user's system brief into a concise, structured spec for an architecture diagram. Output ONLY JSON:
+{"summary":"1-2 sentences","components":[{"name":"","role":""}],"nfrs":["scale/HA/security/cost points"],"assumptions":["..."]}`;
+
+const STUDIO_REVIEW = `You are an adversarial principal reviewer. Given a system spec and a candidate architecture diagram (source), find real weaknesses: single points of failure, security gaps, scaling limits, missing components, anti-patterns. Be specific and critical. Output ONLY JSON:
+{"findings":[{"severity":"high|medium|low","area":"","issue":""}],"summary":"one line"}`;
+
+const STUDIO_SCORE = `You are a strict architecture judge. Given a spec, a candidate diagram, and its review, score it. Output ONLY JSON:
+{"scores":{"completeness":0,"correctness":0,"bestPractice":0,"clarity":0,"cost":0},"total":0,"oneLine":""}
+Each sub-score is 0-10; total is their sum (0-50).`;
+
+function parseJsonLoose(raw) {
+  let s = (raw || "").trim().replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+  const a = s.indexOf("{"), b = s.lastIndexOf("}");
+  if (a === -1 || b <= a) throw new Error("no JSON in response");
+  return JSON.parse(s.slice(a, b + 1));
+}
+
+const studioPanel = $("studio-panel"), studioStage = $("studio-stage"), studioSub = $("studio-sub");
+const studioBtn = $("studio-btn"), studioCloseBtn = $("studio-close");
+const strategiesEl = $("strategies"), studioStatusEl = $("studio-status"), studioCostEl = $("studio-cost");
+
+function setStudioStatus(msg, kind = "info") { studioStatusEl.textContent = msg; studioStatusEl.className = "status show " + kind; }
+
+function studioCard(id, name) {
+  return `<div class="agent-card" data-id="${id}"><div class="ac-name"><span class="ac-dot"></span>${name}</div><div class="ac-info"></div></div>`;
+}
+function buildStudioStage(strategies) {
+  const arch = strategies.map((s, i) => studioCard("arch-" + i, "🏗️ Architect " + (i + 1))).join("");
+  const judge = strategies.map((s, i) =>
+    studioCard("rev-" + i, "⚔️ Reviewer " + (i + 1)) + studioCard("sco-" + i, "🧮 Scorer " + (i + 1))).join("");
+  studioStage.innerHTML =
+    `<div class="studio-phase">1 · Research</div><div class="agent-grid">${studioCard("researcher", "🔎 Researcher")}</div>` +
+    `<div class="studio-phase">2 · Architects (parallel)</div><div class="agent-grid">${arch}</div>` +
+    `<div class="studio-phase">3 · Review &amp; Score (parallel)</div><div class="agent-grid">${judge}</div>` +
+    `<div class="studio-phase">4 · Synthesis</div><div class="agent-grid">${studioCard("synth", "🧬 Synthesizer")}</div>`;
+}
+function setCard(id, status, info, score) {
+  const el = studioStage.querySelector('[data-id="' + id + '"]');
+  if (!el) return;
+  el.className = "agent-card " + (status || "");
+  if (info != null) el.querySelector(".ac-info").textContent = info;
+  if (score != null) {
+    const name = el.querySelector(".ac-name");
+    if (!name.querySelector(".ac-score")) { const s = document.createElement("span"); s.className = "ac-score"; name.appendChild(s); }
+    name.querySelector(".ac-score").textContent = score + "/50";
+  }
+}
+
+async function runStudio(brief, fmt, strategies) {
+  const adapter = FORMATS[fmt];
+  // 1) Researcher
+  setCard("researcher", "running", "analyzing the brief…");
+  let specText = brief;
+  try {
+    const spec = parseJsonLoose(await callLLM(STUDIO_RESEARCH, brief));
+    specText = JSON.stringify(spec, null, 2);
+    setCard("researcher", "done", spec.summary || "spec ready");
+    studioSub.textContent = spec.summary || studioSub.textContent;
+  } catch (e) { setCard("researcher", "failed", "using raw brief"); }
+
+  // 2) Architects — parallel
+  const candidates = (await Promise.all(strategies.map(async (strat, i) => {
+    setCard("arch-" + i, "running", strat);
+    try {
+      const raw = await callLLM(adapter.systemPrompt + "\n\nDESIGN PRIORITY: " + strat,
+        "SYSTEM SPEC:\n" + specText + "\n\nDesign this architecture as a " + adapter.label +
+        " diagram. Emphasize: " + strat + ". Output ONLY the diagram source.");
+      const src = adapter.extractor(raw);
+      setCard("arch-" + i, "done", strat);
+      return { i, strat, src };
+    } catch (e) { setCard("arch-" + i, "failed", e.message); return null; }
+  }))).filter(Boolean);
+  if (!candidates.length) throw new Error("All architect agents failed.");
+
+  // 3) Review + Score — parallel per candidate
+  const judged = await Promise.all(candidates.map(async (c) => {
+    let review = { findings: [] }, total = 0, detail = null;
+    setCard("rev-" + c.i, "running");
+    try { review = parseJsonLoose(await callLLM(STUDIO_REVIEW, "SPEC:\n" + specText + "\n\nDIAGRAM:\n" + c.src));
+      setCard("rev-" + c.i, "done", (review.findings || []).length + " issue(s): " + (review.summary || "")); }
+    catch (e) { setCard("rev-" + c.i, "failed", e.message); }
+    setCard("sco-" + c.i, "running");
+    try { detail = parseJsonLoose(await callLLM(STUDIO_SCORE, "SPEC:\n" + specText + "\nDIAGRAM:\n" + c.src + "\nREVIEW:\n" + JSON.stringify(review)));
+      total = Number(detail.total) || 0;
+      setCard("sco-" + c.i, "done", detail.oneLine || "", total); }
+    catch (e) { setCard("sco-" + c.i, "failed", e.message); }
+    return { ...c, review, total };
+  }));
+  judged.sort((a, b) => b.total - a.total);
+  const top = judged[0];
+  setCard("arch-" + top.i, "win", top.strat + " — winner (" + top.total + "/50)");
+
+  // 4) Synthesizer
+  setCard("synth", "running", "merging the best design…");
+  let finalSrc = top.src;
+  try {
+    const others = judged.slice(1).map(c => "- " + c.strat + " (scored " + c.total + ")").join("\n") || "(none)";
+    const raw = await callLLM(adapter.systemPrompt,
+      "SYSTEM SPEC:\n" + specText +
+      "\n\nWINNING DESIGN (score " + top.total + "/50):\n" + top.src +
+      "\n\nREVIEWER FINDINGS to fix:\n" + JSON.stringify(top.review) +
+      "\n\nRUNNER-UP STRATEGIES whose good ideas you may fold in:\n" + others +
+      "\n\nProduce the FINAL, improved " + adapter.label + " diagram: fix the findings, keep the best ideas, stay faithful to the spec. Output ONLY the diagram source.");
+    finalSrc = adapter.extractor(raw);
+    setCard("synth", "done", "final diagram ready");
+  } catch (e) { setCard("synth", "failed", "kept the winning design"); }
+
+  return { final: finalSrc, winner: top };
+}
+
+function updateStudioCost() {
+  const n = strategiesEl.value.split("\n").map(s => s.trim()).filter(Boolean).length;
+  const calls = 1 + n * 3 + 1; // research + (architect+review+score)×N + synth
+  studioCostEl.textContent = n + " architect agent(s) → ~" + calls + " LLM calls on your key per run.";
+}
+strategiesEl.addEventListener("input", updateStudioCost);
+updateStudioCost();
+
+studioCloseBtn.addEventListener("click", () => studioPanel.classList.remove("show"));
+
+studioBtn.addEventListener("click", async () => {
+  const brief = promptEl.value.trim();
+  if (!brief) { setStudioStatus("Describe a system in section 1 first.", "err"); return; }
+  if (!apiKeyEl.value && !deployLocked()) { setStudioStatus("Set your API key in section 3.", "err"); return; }
+  const strategies = strategiesEl.value.split("\n").map(s => s.trim()).filter(Boolean);
+  if (!strategies.length) { setStudioStatus("Add at least one architect strategy.", "err"); return; }
+  saveConfig();
+  studioBtn.disabled = true;
+  setStudioStatus("Running the agent team…", "info");
+  studioSub.textContent = "Spawning " + strategies.length + " architects + reviewer + scorer + synthesizer…";
+  buildStudioStage(strategies);
+  studioPanel.classList.add("show");
+  const fmt = activeFormat;
+  try {
+    const { final } = await runStudio(brief, fmt, strategies);
+    const laidOut = FORMATS[fmt].renderer.name === "drawio" ? await reflowDrawioWithElk(final, layoutDirection) : final;
+    await FORMATS[fmt].renderer.load(laidOut);
+    showDownloadBar();
+    setRefineAvailable(true);
+    studioSub.textContent = "Done — final diagram rendered. Close this panel to view it.";
+    setStudioStatus("Studio complete. Final diagram is on the canvas.", "ok");
+  } catch (e) {
+    setStudioStatus("Studio failed: " + e.message, "err");
+    studioSub.textContent = "Failed: " + e.message;
+  } finally {
+    studioBtn.disabled = false;
+  }
+});
 
 // ============================================================================
 // INIT
