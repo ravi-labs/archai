@@ -84,6 +84,8 @@
   .download-bar.show { display: block; }
   .download-bar button { background: #fff; border: 1px solid #d0d7de; padding: 6px 10px; border-radius: 5px; font-size: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
   .download-bar button:hover { background: #f6f8fa; }
+
+  .deploy-banner { font-size: 12px; color: #1a7f37; background: #dcffe4; border: 1px solid #b4e6c2; padding: 8px 10px; border-radius: 6px; margin-bottom: 16px; line-height: 1.4; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 </head>
@@ -92,6 +94,7 @@
   <aside class="sidebar">
     <h1>ArchAI</h1>
     <div class="tagline">Plain English → editable architecture diagrams. drawio + Mermaid. Generate fresh, load existing, or refine with AI. Free, BYOK, no signup.</div>
+    <div class="deploy-banner" id="deploy-banner" style="display:none;"></div>
 
     <details open>
       <summary>1. Describe your system</summary>
@@ -126,7 +129,7 @@
       </div>
     </details>
 
-    <details>
+    <details id="provider-section">
       <summary>3. LLM provider (BYOK)</summary>
       <div class="body">
         <label for="provider">Provider</label>
@@ -179,6 +182,30 @@
 </div>
 
 <script>
+// ============================================================================
+// INTERNAL DEPLOY CONFIG
+// ----------------------------------------------------------------------------
+// To pre-wire ArchAI for your team (so colleagues configure nothing), edit the
+// fields below and host this index.html on your intranet. Leave provider:null
+// for the normal public bring-your-own-key behavior.
+//
+//   Example — internal LiteLLM gateway, locked so nobody has to touch settings:
+//     provider: "litellm",
+//     baseUrl:  "https://litellm.corp.example.com",
+//     model:    "claude-3-5-sonnet",
+//     apiKey:   "sk-litellm-team-key",   // visible to anyone who opens the page — fine behind internal hosting
+//     lockProvider: true,
+//     note: "Wired to ACME's internal LiteLLM gateway — just describe a system and Generate."
+// ============================================================================
+window.ARCHAI_CONFIG = {
+  provider: null,        // null = public BYOK. Internal: "litellm" | "openai-compat" | "anthropic" | "bedrock"
+  baseUrl:  "",          // your gateway URL
+  model:    "",          // a model your gateway exposes
+  apiKey:   "",          // optional shared/virtual key (omit if your gateway uses header/SSO auth)
+  lockProvider: false,   // true = hide section 3 so colleagues can't change the provider
+  note:     ""           // optional banner shown at the top of the sidebar
+};
+
 // ============================================================================
 // PROVIDER PRESETS
 // ============================================================================
@@ -823,8 +850,35 @@ downloadBtn.addEventListener("click", async () => {
   } else {
     applyProviderPreset("openai-compat", true);
   }
+  applyDeployConfig();
   applyFormat(formatEl.value);
 })();
+
+// Apply an internal deploy config (window.ARCHAI_CONFIG): pre-fill the provider
+// for a whole team, and optionally lock + hide the provider section. In locked
+// mode the config always wins; otherwise it's just a first-run default.
+function deployLocked() { return !!(window.ARCHAI_CONFIG && window.ARCHAI_CONFIG.lockProvider); }
+function applyDeployConfig() {
+  const D = window.ARCHAI_CONFIG || {};
+  if (!D.provider) return;                       // inert unless a provider is set
+  const force = deployLocked() || !loadConfig();  // locked → always; else default for first run
+  if (force) {
+    providerEl.value = D.provider;
+    if (D.baseUrl) baseUrlEl.value = D.baseUrl;
+    if (D.model) modelEl.value = D.model;
+    if (D.apiKey) apiKeyEl.value = D.apiKey;
+  }
+  applyProviderPreset(providerEl.value, false);
+  if (D.note) {
+    const b = document.getElementById("deploy-banner");
+    if (b) { b.textContent = D.note; b.style.display = "block"; }
+  }
+  if (D.lockProvider) {
+    const sec = document.getElementById("provider-section");
+    if (sec) sec.style.display = "none";          // colleagues don't see / can't change it
+    saveConfig();                                  // persist so Generate works immediately
+  }
+}
 
 formatEl.addEventListener("change", () => applyFormat(formatEl.value));
 providerEl.addEventListener("change", () => applyProviderPreset(providerEl.value, true));
@@ -859,7 +913,7 @@ testBtn.addEventListener("click", async () => {
 generateBtn.addEventListener("click", async () => {
   const userPrompt = promptEl.value.trim();
   if (!userPrompt) { setStatus("Describe a system first.", "err"); return; }
-  if (!apiKeyEl.value) { setStatus("Set your API key in section 3.", "err"); return; }
+  if (!apiKeyEl.value && !deployLocked()) { setStatus("Set your API key in section 3.", "err"); return; }
   saveConfig();
   generateBtn.disabled = true;
   refineBtn.disabled = true;
@@ -893,7 +947,7 @@ loadXmlBtn.addEventListener("click", () => {
 refineBtn.addEventListener("click", async () => {
   const instruction = promptEl.value.trim();
   if (!instruction) { setStatus("Describe what to change in the prompt above.", "err"); return; }
-  if (!apiKeyEl.value) { setStatus("Set your API key in section 3.", "err"); return; }
+  if (!apiKeyEl.value && !deployLocked()) { setStatus("Set your API key in section 3.", "err"); return; }
   saveConfig();
   refineBtn.disabled = true;
   generateBtn.disabled = true;

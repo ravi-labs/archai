@@ -135,6 +135,38 @@ Drop the folder in — they all serve static files with no config. Same files, s
 
 Just open `index.html` from disk (`file://`). Works in any modern browser. Local models like Ollama may need `OLLAMA_ORIGINS=*` to accept browser requests.
 
+### Internal / team deployment (pre-wired to your gateway)
+
+Best way to roll ArchAI out inside a company: **host the single file internally and
+pre-wire it to your LLM gateway**, so colleagues open one link and start generating with
+**zero setup** — no provider dropdown, no key pasting.
+
+1. Copy `index.html` to wherever you serve internal static files (S3 + CloudFront, nginx,
+   intranet/Confluence page, GitHub Enterprise / GitLab Pages).
+2. Edit the **`ARCHAI_CONFIG`** block near the top of the file's `<script>`. Example for an
+   internal **LiteLLM** gateway, locked so nobody has to touch settings:
+
+   ```js
+   window.ARCHAI_CONFIG = {
+     provider: "litellm",
+     baseUrl:  "https://litellm.corp.example.com",  // your LiteLLM URL
+     model:    "claude-3-5-sonnet",                 // a model your proxy exposes
+     apiKey:   "sk-litellm-team-key",               // a shared/virtual key (or "" if the gateway uses header/SSO auth)
+     lockProvider: true,                            // hides the provider section so it can't be changed
+     note: "Wired to ACME's internal LiteLLM gateway — just describe a system and Generate."
+   };
+   ```
+
+   With `lockProvider: true`, the provider section is hidden, the config is applied for
+   everyone, and the "enter your API key" prompt is skipped (auth is the gateway's job).
+   Leave `provider: null` (the default) for the normal public bring-your-own-key behavior.
+
+3. Share the internal URL. For **engineers**, also share the [Reviewer MCP](reviewer/) wired
+   to the same gateway (`ARCHAI_BASE_URL=https://litellm.corp.example.com`).
+
+The key (if any) sits in a file behind your internal hosting — fine for a team gateway, and
+no individual ever pastes a personal credential.
+
 ## Trust — why you can believe "your key never leaves your browser"
 
 Five layers, in increasing strength:
