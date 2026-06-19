@@ -95,6 +95,10 @@
     <h1>ArchAI</h1>
     <div class="tagline">Plain English → editable architecture diagrams. drawio + Mermaid. Generate fresh, load existing, or refine with AI. Free, BYOK, no signup.</div>
     <div class="deploy-banner" id="deploy-banner" style="display:none;"></div>
+    <div id="model-picker-wrap" style="display:none; margin-bottom:16px;">
+      <label for="model-picker">Model</label>
+      <select id="model-picker"></select>
+    </div>
 
     <details open>
       <summary>1. Describe your system</summary>
@@ -189,20 +193,22 @@
 // fields below and host this index.html on your intranet. Leave provider:null
 // for the normal public bring-your-own-key behavior.
 //
-//   Example — internal LiteLLM gateway, locked so nobody has to touch settings:
+//   Example — internal LiteLLM gateway, provider/URL locked but model selectable:
 //     provider: "litellm",
 //     baseUrl:  "https://litellm.corp.example.com",
-//     model:    "claude-3-5-sonnet",
-//     apiKey:   "sk-litellm-team-key",   // visible to anyone who opens the page — fine behind internal hosting
-//     lockProvider: true,
-//     note: "Wired to ACME's internal LiteLLM gateway — just describe a system and Generate."
+//     model:    "claude-3-5-sonnet",            // default selection
+//     models:   ["claude-3-5-sonnet", "gpt-4o", "claude-3-haiku"],  // choices users may pick
+//     apiKey:   "sk-litellm-team-key",          // visible to anyone who opens the page — fine behind internal hosting
+//     lockProvider: true,                       // hides provider/URL/key; the model picker stays visible
+//     note: "Wired to ACME's internal LiteLLM gateway — pick a model and Generate."
 // ============================================================================
 window.ARCHAI_CONFIG = {
   provider: null,        // null = public BYOK. Internal: "litellm" | "openai-compat" | "anthropic" | "bedrock"
   baseUrl:  "",          // your gateway URL
-  model:    "",          // a model your gateway exposes
+  model:    "",          // default model
+  models:   [],          // optional: model ids users may choose from (shown even when lockProvider hides the rest)
   apiKey:   "",          // optional shared/virtual key (omit if your gateway uses header/SSO auth)
-  lockProvider: false,   // true = hide section 3 so colleagues can't change the provider
+  lockProvider: false,   // true = hide section 3 so colleagues can't change provider/URL/key
   note:     ""           // optional banner shown at the top of the sidebar
 };
 
@@ -873,11 +879,23 @@ function applyDeployConfig() {
     const b = document.getElementById("deploy-banner");
     if (b) { b.textContent = D.note; b.style.display = "block"; }
   }
+  // Optional model picker — stays visible even when the provider section is locked,
+  // so colleagues can choose a model without touching the URL/key.
+  if (Array.isArray(D.models) && D.models.length) {
+    const wrap = document.getElementById("model-picker-wrap");
+    const pick = document.getElementById("model-picker");
+    pick.innerHTML = "";
+    D.models.forEach((m) => { const o = document.createElement("option"); o.value = m; o.textContent = m; pick.appendChild(o); });
+    const def = (D.model && D.models.includes(D.model)) ? D.model : D.models[0];
+    pick.value = def; modelEl.value = def;
+    pick.addEventListener("change", () => { modelEl.value = pick.value; saveConfig(); });
+    if (wrap) wrap.style.display = "block";
+  }
   if (D.lockProvider) {
     const sec = document.getElementById("provider-section");
-    if (sec) sec.style.display = "none";          // colleagues don't see / can't change it
-    saveConfig();                                  // persist so Generate works immediately
+    if (sec) sec.style.display = "none";          // colleagues don't see / can't change provider/URL/key
   }
+  saveConfig();                                    // persist so Generate works immediately
 }
 
 formatEl.addEventListener("change", () => applyFormat(formatEl.value));
