@@ -80,10 +80,11 @@
   .hint { font-size: 11px; color: #6a737d; margin-top: 4px; line-height: 1.4; }
   .hint code { background: #f6f8fa; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
 
-  .download-bar { position: absolute; top: 12px; right: 12px; z-index: 10; display: none; }
-  .download-bar.show { display: block; }
-  .download-bar button { background: #fff; border: 1px solid #d0d7de; padding: 6px 10px; border-radius: 5px; font-size: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-  .download-bar button:hover { background: #f6f8fa; }
+  .download-bar { position: absolute; top: 12px; right: 12px; z-index: 10; display: none; gap: 6px; align-items: center; }
+  .download-bar.show { display: flex; }
+  .download-bar button, .download-bar select { background: #fff; border: 1px solid #d0d7de; padding: 6px 10px; border-radius: 5px; font-size: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.06); width: auto; }
+  .download-bar button:hover, .download-bar select:hover { background: #f6f8fa; }
+  .download-bar button:disabled { opacity: 0.6; cursor: not-allowed; }
 
   .deploy-banner { font-size: 12px; color: #1a7f37; background: #dcffe4; border: 1px solid #b4e6c2; padding: 8px 10px; border-radius: 6px; margin-bottom: 16px; line-height: 1.4; }
 </style>
@@ -179,6 +180,13 @@
 
   <main class="canvas">
     <div class="download-bar" id="download-bar">
+      <span id="layout-controls" style="display:none; gap:6px;">
+        <select id="layout-dir" title="Layout direction">
+          <option value="RIGHT">→ Left-to-right</option>
+          <option value="DOWN">↓ Top-down</option>
+        </select>
+        <button id="relayout-btn" title="Re-flow the current diagram with the layout engine">Re-layout</button>
+      </span>
       <button id="download-btn">Download source</button>
     </div>
     <iframe id="drawio" src="https://embed.diagrams.net/?embed=1&ui=kennedy&proto=json&saveAndExit=0&noSaveBtn=1&libraries=1"></iframe>
@@ -478,6 +486,7 @@ const fileInputEl = $("file-input"), xmlPasteEl = $("xml-paste"), loadXmlBtn = $
 const drawioFrame = $("drawio");
 const mermaidHost = $("mermaid-host");
 const downloadBar = $("download-bar"), downloadBtn = $("download-btn");
+const layoutControls = $("layout-controls"), layoutDirEl = $("layout-dir"), relayoutBtn = $("relayout-btn");
 
 // ============================================================================
 // STATUS HELPERS
@@ -616,6 +625,7 @@ window.addEventListener("message", (e) => {
 // LAYOUT — ELK auto-layout (positions computed by an algorithm, not the LLM)
 // ============================================================================
 let MERMAID_ELK_OK = false;
+let layoutDirection = "RIGHT";   // "RIGHT" = left-to-right, "DOWN" = top-down (drawio reflow)
 
 // Route graph-family Mermaid diagrams through ELK via a frontmatter config.
 // Restricted to flowchart/graph (where the pluggable layout applies and helps
@@ -631,7 +641,7 @@ function mermaidWithElk(source) {
 // Re-flow a drawio diagram with ELK: discard the LLM's x/y, compute clean
 // positions (layered, left→right) honoring container nesting (VPC/subnet), and
 // write them back. Best-effort — returns the original XML on any failure.
-async function reflowDrawioWithElk(xml) {
+async function reflowDrawioWithElk(xml, direction) {
   try {
     if (!window.ELK) return xml;
     const doc = new DOMParser().parseFromString(xml, "text/xml");
@@ -680,7 +690,7 @@ async function reflowDrawioWithElk(xml) {
       id: "root",
       layoutOptions: {
         "elk.algorithm": "layered",
-        "elk.direction": "RIGHT",
+        "elk.direction": direction === "DOWN" ? "DOWN" : "RIGHT",
         "elk.layered.spacing.nodeNodeBetweenLayers": "90",
         "elk.spacing.nodeNode": "55",
         "elk.padding": "[top=20,left=20,bottom=20,right=20]"
@@ -789,6 +799,9 @@ function applyFormat(name) {
   fileInputEl.accept = adapter.fileAccept;
   xmlPasteEl.placeholder = adapter.pastePlaceholder;
   renderExampleButtons();
+  // Layout controls (Re-layout + direction) only apply to drawio; Mermaid lays
+  // itself out from its own source.
+  if (layoutControls) layoutControls.style.display = adapter.renderer.name === "drawio" ? "inline-flex" : "none";
   // Show the right canvas
   adapter.renderer.show();
   // Refine availability follows the active renderer's known state
@@ -876,7 +889,7 @@ async function runGenerate(userPrompt) {
   const adapter = activeAdapter();
   const raw = await callLLM(adapter.systemPrompt, userPrompt);
   const content = adapter.extractor(raw);
-  const laidOut = adapter.renderer.name === "drawio" ? await reflowDrawioWithElk(content) : content;
+  const laidOut = adapter.renderer.name === "drawio" ? await reflowDrawioWithElk(content, layoutDirection) : content;
   await adapter.renderer.load(laidOut);
   showDownloadBar();
   return laidOut;
@@ -931,6 +944,28 @@ downloadBtn.addEventListener("click", async () => {
     setStatus("Download failed: " + err.message, "err");
   }
 });
+
+// ============================================================================
+// RE-LAYOUT (drawio) — re-flow the current diagram on demand, incl. manual edits
+// ============================================================================
+async function runRelayout() {
+  if (activeFormat !== "drawio") return;
+  relayoutBtn.disabled = true;
+  setStatus("Re-laying out…", "info");
+  try {
+    const xml = await drawioRenderer.getCurrent();
+    if (!xml) { setStatus("No diagram to re-layout yet.", "err"); return; }
+    const laidOut = await reflowDrawioWithElk(xml, layoutDirection);
+    await drawioRenderer.load(laidOut);
+    setStatus("Re-laid out. Edit further, or refine with AI.", "ok");
+  } catch (err) {
+    setStatus("Re-layout failed: " + err.message, "err");
+  } finally {
+    relayoutBtn.disabled = false;
+  }
+}
+relayoutBtn.addEventListener("click", runRelayout);
+layoutDirEl.addEventListener("change", () => { layoutDirection = layoutDirEl.value; runRelayout(); });
 
 // ============================================================================
 // INIT
@@ -1093,7 +1128,7 @@ refineBtn.addEventListener("click", async () => {
     setStatus("Calling LLM to apply your change…", "info");
     const raw = await callLLM(adapter.systemPrompt, buildRefineUserMessage(currentSource, instruction));
     const content = adapter.extractor(raw);
-    const laidOut = adapter.renderer.name === "drawio" ? await reflowDrawioWithElk(content) : content;
+    const laidOut = adapter.renderer.name === "drawio" ? await reflowDrawioWithElk(content, layoutDirection) : content;
     await adapter.renderer.load(laidOut);
     showDownloadBar();
     setStatus("Diagram updated. Iterate again, or edit on the right.", "ok");
